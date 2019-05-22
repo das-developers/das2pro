@@ -90,29 +90,3 @@ function das2_double_to_tt2000, timeunits, value
 
 	return, nEpoch
 end
-
-function das2_isleap, year
-	if (year mod 4) NE 0 OR (year mod 400) EQ 0 then return, 0
-	return, 1
-end
-
-;+
-; Rewrite to use parsetime.pro to parse time components from a variety
-; of string formats, then call cdf_tt2000 to get the epoch.
-;
-; 2019-01-24 original.  L. Granroth
-;-
-
-function das2_text_to_tt2000, sTime
-
-	status = parsetime (sTime, Y, M, D, nDOY, nHr, nMin, rSec)
-        ; if status eq 1 return, fail
-
-	nSec   = floor(rSec)
-	nMilli = floor( (rSec - nSec)*1.0D+03 )
-	nMicro = floor( (rSec - nSec)*1.0D+06 - nMilli*1.0D+03 )
-	nNano  = floor( (rSec - nSec)*1.0D+09 - nMilli*1.0D+06 - nMicro*1.0D+03 )
-        
-        cdf_tt2000, nEpoch, Y, M, D, nHr, nMin, nSec, nMilli, nMicro, nNano, /COMPUTE_EPOCH
-	return, nEpoch
-end

@@ -1,4 +1,4 @@
-FUNCTION Url_Callback, status, progress, data
+FUNCTION _das2_urlCallback, status, progress, data
 ;+
 ; NAME:
 ;         Url_Callback
@@ -19,10 +19,10 @@ FUNCTION Url_Callback, status, progress, data
    RETURN, 1
 END
 
-FUNCTION TAG_EXIST, struct, tag
+FUNCTION _das2_tagExist, struct, tag
   ;+
   ; NAME:
-  ;         TAG_EXIST
+  ;         _das2_tagExist
   ; PURPOSE:
   ;         Check if a tag name exists in a stucture
   ; OUTPUTS:
@@ -37,10 +37,10 @@ FUNCTION TAG_EXIST, struct, tag
       if ind NE -1 THEN return, 1b ELSE return, 0b
 END
 
-FUNCTION parseVarSize, type
+FUNCTION _das2_parseVarSize, type
   ;+
   ; NAME:
-  ;       parseVarSize
+  ;       _das2_parseVarSize
   ; PURPOSE:
   ;       check a size of variable in bytes for a given type
   ; INPUTS:
@@ -49,7 +49,7 @@ FUNCTION parseVarSize, type
   ;       (uint) number of bytes for a given Var type
   ;
   ; EXAMPLE:
-  ;       sz = parseVarSize('little_endian_real4')
+  ;       sz = _das2_parseVarSize('little_endian_real4')
   ;
   ; MODIFICATION HISTORY:
   ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
@@ -58,10 +58,10 @@ FUNCTION parseVarSize, type
         if strcmp(b, '') THEN return, 0u ELSE return, uint(b)
 END
 
-FUNCTION setVarType, data, type, dim=dim
+FUNCTION _das2_setVarType, data, type, dim=dim
   ;+
   ; NAME:
-  ;         setVarType
+  ;         _das2_setVarType
   ; PURPOSE:
   ;       resort and convert a byte stream to an array of given type and dimension
   ; INPUTS:
@@ -79,7 +79,7 @@ FUNCTION setVarType, data, type, dim=dim
   ;-
       IF NOT KEYWORD_SET(dim) then dim = 1
       data_size = n_elements(data)
-      type_size = parseVarSize(type)
+      type_size = _das2_parseVarSize(type)
       ;; !! big endian
       IF stregex(type, '^big_', /boolean) THEN bige = 1 ELSE bige = 0
       ; if number of bytes do not match type and dimension then return []
@@ -118,10 +118,10 @@ FUNCTION setVarType, data, type, dim=dim
       return, []
 END
 
-FUNCTION parsePackets, pks, renderer_waveform
+FUNCTION _das2_parsePackets, pks, renderer_waveform
   ;+
   ; NAME:
-  ;         parsePackets
+  ;         _das2_parsePackets
   ; PURPOSE:
   ;
   ; INPUTS:
@@ -171,13 +171,13 @@ FUNCTION parsePackets, pks, renderer_waveform
                 ; shift a stream pointer
                 ptr_stream += 4
                 ; parse a type of x variable, typically time
-                xTypeSize = parseVarSize(packetHeader.packet.x._type)
+                xTypeSize = _das2_parseVarSize(packetHeader.packet.x._type)
                 ; !!! this is a tricky part, need to set variable type properly
-                xdata.add, setVarType(pks[ptr_stream:ptr_stream+xTypeSize-1], packetHeader.packet.x._type)
+                xdata.add, _das2_setVarType(pks[ptr_stream:ptr_stream+xTypeSize-1], packetHeader.packet.x._type)
                 ; shift a stream pointer
                 ptr_stream += xTypeSize
                 ; set a number of items stored in a packet, yscan
-                IF TAG_EXIST(packetHeader.packet, 'yscan') THEN begin
+                IF _das2_tagExist(packetHeader.packet, 'yscan') THEN begin
                   yscan = packetHeader.packet.yscan
                 ENDIF ELSE begin
                   yscan = packetHeader.packet.y
@@ -187,16 +187,16 @@ FUNCTION parsePackets, pks, renderer_waveform
                 FOR j=0, yscan.Count()-1 DO BEGIN
                   yscan_struct = yscan[j];.ToStruct()
                   IF SIZE(yscan_struct, /type) EQ 11 THEN yscan_struct = yscan_struct->ToStruct()
-                  IF TAG_EXIST(yscan_struct, '_nitems') THEN BEGIN
+                  IF _das2_tagExist(yscan_struct, '_nitems') THEN BEGIN
                     nitems = yscan_struct._nitems
                   ENDIF ELSE begin
                     nitems = 1
                   ENDELSE
-                  yTypeSize = parseVarSize(yscan_struct._type)
+                  yTypeSize = _das2_parseVarSize(yscan_struct._type)
                 ; !! NEED to be updated
                 ; read a whole chunk of data as a byte vector
                 if ptr_packet eq 2 and ptr_data eq 28 then stop
-                  z = setVarType(pks[ptr_stream:ptr_stream+(yTypeSize*nitems)-1], yscan_struct._type, $
+                  z = _das2_setVarType(pks[ptr_stream:ptr_stream+(yTypeSize*nitems)-1], yscan_struct._type, $
                     dim=nitems)
                     IF not KEYWORD_SET(z) THEN begin
                         return, !NULL
@@ -218,8 +218,8 @@ FUNCTION parsePackets, pks, renderer_waveform
               IF renderer_waveform EQ 1 THEN begin
                  y = findgen(yscan._nitems) * yscan._YTAGINTERVAL
               ENDIF ELSE BEGIN
-                IF  TAG_EXIST(packetHeader.packet, 'yscan') THEN BEGIN
-                  IF TAG_EXIST(yscan, '_ytags') THEN begin
+                IF  _das2_tagExist(packetHeader.packet, 'yscan') THEN BEGIN
+                  IF _das2_tagExist(yscan, '_ytags') THEN begin
                     y = float(strsplit(yscan[0]._ytags, ',', /extract))
                   ENDIF ELSE BEGIN
                     y = yscan._ytagmin + findgen(yscan._nitems) * yscan._YTAGINTERVAL
@@ -244,7 +244,7 @@ FUNCTION parsePackets, pks, renderer_waveform
     return, d
 END
 
-FUNCTION das2reader, dataSet, stime, ftime, interval=interval, resolution=resolution, params=params, ascii=ascii, extras=extras, verbose=verbose
+FUNCTION das2_reader, dataSet, stime, ftime, interval=interval, resolution=resolution, params=params, ascii=ascii, extras=extras, verbose=verbose
   ;+
   ; NAME:
   ;           das2reader
@@ -322,7 +322,7 @@ FUNCTION das2reader, dataSet, stime, ftime, interval=interval, resolution=resolu
     oUrl = OBJ_NEW('IDLnetURL')
 
     IF VERBOSE THEN BEGIN
-      oUrl->SetProperty, CALLBACK_FUNCTION='Url_Callback'
+      oUrl->SetProperty, CALLBACK_FUNCTION='_das2_urlCallback'
       oUrl->SetProperty, VERBOSE=1
     ENDIF
 
@@ -343,15 +343,15 @@ FUNCTION das2reader, dataSet, stime, ftime, interval=interval, resolution=resolu
     ENDIF
     streamHeaderSize = long(string(buffer[4:9])) ; fixed lenght for stream header size
     streamHeader = (xml_parse(string(buffer[10:10+streamHeaderSize-1])))->ToStruct(/recursive)
-    IF TAG_EXIST(streamHeader, 'stream') THEN BEGIN
+    IF _das2_tagExist(streamHeader, 'stream') THEN BEGIN
       stream = LIST(streamHeader)
       ptrStream = 10 + streamHeaderSize
       IF ptrStream eq n_elements(buffer) THEN return, stream
-      IF TAG_EXIST(streamHeader.stream.properties, '_string_renderer') THEN BEGIN
+      IF _das2_tagExist(streamHeader.stream.properties, '_string_renderer') THEN BEGIN
          IF strcmp(streamHeader.stream.properties._string_renderer, 'waveform') THEN waveform = 1 $
          ELSE waveform = 0
        ENDIF ELSE waveform = 0
-      dataSet = parsePackets(buffer[ptrStream:*], waveform)
+      dataSet = _das2_parsePackets(buffer[ptrStream:*], waveform)
       IF KEYWORD_SET(dataSet) THEN RETURN, stream + dataSet ELSE RETURN, stream
     ENDIF ELSE begin
       RETURN, string(buffer)

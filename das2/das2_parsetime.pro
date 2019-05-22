@@ -1,5 +1,5 @@
-function parsetime, timestr, year, month, day, doy, hour, minute, second, $
-  julian=julian, debug=debug
+function das2_parsetime, timestr, year, month, day, doy, hour, minute, $
+  second, julian=julian, debug=debug
 
 ;+
 ; NAME:
