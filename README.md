@@ -14,8 +14,9 @@ To install this package using IDL 8.7.1 or above:
 
 To use this package:
 
-   `IDL> .compile das2
-    IDL> .run ex02_mex_marsis_ais`
+```IDL> .compile das2
+IDL> .run ex02_mex_marsis_ais
+```
 
 Other example are included as well see your 
 
