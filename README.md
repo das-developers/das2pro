@@ -24,3 +24,9 @@ Other example are included as well see your
   `$HOME/.idl/idl/packages/das2pro/examples`
   
 directory for other $MAIN$ programs.
+
+
+To remove this package:
+
+  `IDL> IPM, /remove, 'das2pro'`
+
