@@ -18,8 +18,9 @@
 ;-
 
 function das2_text_to_tt2000, sTime
+	compile_opt IDL2
 
-	status = parsetime (sTime, Y, M, D, nDOY, nHr, nMin, rSec)
+	status = das2_parsetime (sTime, Y, M, D, nDOY, nHr, nMin, rSec)
         ; if status eq 1 return, fail
 
 	nSec   = floor(rSec)

@@ -24,6 +24,8 @@ function das2_double_to_tt2000, timeunits, value
 	; calendar time, then finally use IDL built in to get TT2000 thus avoiding
 	; the need for a leap second table
 
+	compile_opt IDL2
+
 	if CDF_EXISTS() eq 0 then message, 'CDF library not supported for your IDL installation'
 
 	; Get the julian day and seconds since midnight without leap seconds.

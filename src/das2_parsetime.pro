@@ -1,16 +1,18 @@
+
+
 function das2_parsetime, timestr, year, month, day, doy, hour, minute, $
   second, julian=julian, debug=debug
 
 ;+
 ; NAME:
-;	PARSETIME
+;	DAS2_PARSETIME
 ;
 ; PURPOSE:
 ;	Given a string, parse typical delimited ASCII date/time and
 ;	return year, month, day of month, day of year, hour, minute, second.
 ;
 ; CALLING SEQUENCE:
-;	status = parsetime (timestr, year, month, day_month, day_year $
+;	status = das2_parsetime (timestr, year, month, day_month, day_year $
 ;               [, hour, minute, second] [, julian=julian] [, /debug])
 ;
 ; INPUTS:
@@ -51,6 +53,8 @@ function das2_parsetime, timestr, year, month, day, doy, hour, minute, $
 ;	2012-10-30 Rewrite using regex.  L. Granroth
 ;
 ;-
+
+compile_opt IDL2
 
 on_error, 2
 
@@ -164,7 +168,7 @@ doy = -1
 
 n = n_elements(regex_date) - 1
 
-if debug then printf, -2, 'PARSETIME DEBUG: input string "'+sdate+'"'
+if keyword_set(debug) then printf, -2, 'PARSETIME DEBUG: input string "'+sdate+'"'
 
 ; extract any date patterns
 
@@ -174,7 +178,7 @@ for i = 0, n do begin
 
   if ipos ge 0 then begin ; found a match
     sdate = strmid (sdate, ipos, length)
-    if debug then printf, -2, 'PARSETIME DEBUG: date string "'+sdate+'"'
+    if keyword_set(debug) then printf, -2, 'PARSETIME DEBUG: date string "'+sdate+'"'
     lentime = strlen (stime) - ipos - length
     stime = strmid (stime, ipos+length, lentime)
     for j = 0, 2 do begin ; process up to 3 date components
@@ -186,7 +190,7 @@ for i = 0, n do begin
         return, failure
       endif
       s = strmid(sdate,ip,len)
-      if debug then printf, -2, 'PARSETIME DEBUG: date component "', s, $
+      if keyword_set(debug) then printf, -2, 'PARSETIME DEBUG: date component "', s, $
         '" as ', pattern_date[j,i]
       if pattern_date[j,i] eq 'yyddd' then $
         reads, s, year, doy, format='(i2,i3)' $
@@ -278,7 +282,7 @@ if ipos ge 0 then begin ; found day of year in parens
       '" conflicting day of year "', s, '"'
     return, failure
   endif
-  if debug then printf, -2, 'PARSETIME DEBUG: day of year "', s, '"'
+  if keyword_set(debug) then printf, -2, 'PARSETIME DEBUG: day of year "', s, '"'
 endif
 
 ; if caller doesn't want time of day then return
@@ -297,7 +301,7 @@ second = 0
 fsecond = 0.0
 want_time = 0
 
-if debug then printf, -2, 'PARSETIME DEBUG: input time string "', stime, '"'
+if keyword_set(debug) then printf, -2, 'PARSETIME DEBUG: input time string "', stime, '"'
 
 ; extract any time patterns
 
@@ -312,7 +316,7 @@ if strlen(stime) gt 0 then begin
 
     if ipos ge 0 then begin ; found a match
       stime = strmid (stime, ipos, length)
-      if debug then printf, -2, 'PARSETIME DEBUG: time string "', stime, '"'
+      if keyword_set(debug) then printf, -2, 'PARSETIME DEBUG: time string "', stime, '"'
       for j = 0, 3 do begin ; process up to 4 time components
         if pattern_time[j,i] eq '' then break
         ip = stregex (stime, '[0-9]+', length=len)
@@ -322,7 +326,7 @@ if strlen(stime) gt 0 then begin
           return, failure
         endif
         s = strmid(stime,ip,len)
-        if debug then printf, -2, 'PARSETIME DEBUG: time component "', $
+        if keyword_set(debug) then printf, -2, 'PARSETIME DEBUG: time component "', $
           s, '" as ', pattern_time[j,i]
         if (pattern_time[j,i] eq 'hhmm') and allow_hhmm then $
           reads, s, hour, minute, format='(2i2)' $
@@ -347,7 +351,7 @@ if strlen(stime) gt 0 then begin
 
 endif ; nonzero time string
 
-if debug then printf, -2, 'PARSETIME DEBUG: remnants "', stime, '"'
+if keyword_set(debug) then printf, -2, 'PARSETIME DEBUG: remnants "', stime, '"'
 
 if want_date or want_time then begin
   printf, -2, 'PARSETIME ERROR: input string "', timestr, '"'

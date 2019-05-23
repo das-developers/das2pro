@@ -12,6 +12,7 @@ FUNCTION _das2_urlCallback, status, progress, data
 ;
 ;
 ;-
+	compile_opt, idl2, HIDDEN
 
    ; print the info msgs from the url object
    PRINT, status
@@ -33,8 +34,10 @@ FUNCTION _das2_tagExist, struct, tag
   ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
   ;
   ;-
-      ind = where(strcmp(TAG_NAMES(struct),tag, /fold_case))
-      if ind NE -1 THEN return, 1b ELSE return, 0b
+  compile_opt, idl2, HIDDEN
+
+  ind = where(strcmp(TAG_NAMES(struct),tag, /fold_case))
+  if ind NE -1 THEN return, 1b ELSE return, 0b
 END
 
 FUNCTION _das2_parseVarSize, type
@@ -54,8 +57,10 @@ FUNCTION _das2_parseVarSize, type
   ; MODIFICATION HISTORY:
   ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
   ;-
-        b = stregex(type, '[0-9]{1,2}$', /extract)
-        if strcmp(b, '') THEN return, 0u ELSE return, uint(b)
+  compile_opt, idl2, HIDDEN
+
+  b = stregex(type, '[0-9]{1,2}$', /extract)
+  if strcmp(b, '') THEN return, 0u ELSE return, uint(b)
 END
 
 FUNCTION _das2_setVarType, data, type, dim=dim
@@ -77,6 +82,8 @@ FUNCTION _das2_setVarType, data, type, dim=dim
   ; MODIFICATION HISTORY:
   ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
   ;-
+  compile_opt, idl2, HIDDEN
+
       IF NOT KEYWORD_SET(dim) then dim = 1
       data_size = n_elements(data)
       type_size = _das2_parseVarSize(type)
@@ -136,6 +143,7 @@ FUNCTION _das2_parsePackets, pks, renderer_waveform
   ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
   ;     Nov. 2018 DP, fixed object->struct conversion for ypackets
   ;-
+  compile_opt, idl2, HIDDEN
         ptr_stream = 0l ; byte pointer in the stream
         ptr_packet = 0l ; number of packets
         stream_lenght = n_elements(pks) ; number of bytes in the stream
@@ -269,6 +277,8 @@ FUNCTION das2_reader, dataSet, stime, ftime, interval=interval, resolution=resol
   ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
   ;
   ;-
+  compile_opt IDL2
+
     ; catch exceptions
     ;CATCH, errorStatus
     errorStatus = 0
