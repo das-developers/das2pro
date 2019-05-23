@@ -18,7 +18,7 @@ IDL> ex02_mex_marsis_ais     ;for example
 ```
 Here '$' indicates a shell command, and 'IDL>' indicates an IDL command.
 
-**das2pro** is an IDL package and may be installed using the (
+**das2pro** is an IDL package and may be installed using the 
 [IPM](https://www.harrisgeospatial.com/docs/ipm.html)  command.  The IPM command
 only installs github.com releases (does not use clone) and as of May 2019, the
 current github releases are  *not yet ready for public use*.  If you would like 
