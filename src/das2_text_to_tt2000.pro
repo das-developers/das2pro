@@ -11,7 +11,8 @@
 ; from a variety of string formats, and then calling cdf_tt2000 to get
 ; the epoch.
 ;
-; 2019-01-24 original.  L. Granroth
+; 2019-01-24 L. Granroth, original
+; 2019-05-23 C. Piker,    nano second accuracy fix
 ;-
 
 function das2_text_to_tt2000, sTime
