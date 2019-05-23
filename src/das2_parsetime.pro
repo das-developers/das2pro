@@ -51,6 +51,7 @@ function das2_parsetime, timestr, year, month, day, doy, hour, minute, $
 ;
 ; REVISION HISTORY:
 ;	2012-10-30 Rewrite using regex.  L. Granroth
+;	2019-05-23 Extended to handle nanoseconds.  LJG
 ;
 ;-
 
@@ -131,7 +132,7 @@ hrmn='(0[0-9]|1[0-9]|2[0-3])[0-5][0-9]'
 hr='(0?[0-9]|1[0-9]|2[0-3])'
 mn='[0-5][0-9]'
 ss='([0-5][0-9]|6[01])'
-sss='\.[0-9]{1,6}'
+sss='\.[0-9]{1,9}'
 
 ; time delimiter, begin and end of time string
 
@@ -297,8 +298,8 @@ endif
 
 hour = 0
 minute = 0
-second = 0
-fsecond = 0.0
+isecond = 0
+dsecond = 0.0d0
 want_time = 0
 
 if keyword_set(debug) then printf, -2, 'PARSETIME DEBUG: input time string "', stime, '"'
@@ -335,9 +336,9 @@ if strlen(stime) gt 0 then begin
         else if pattern_time[j,i] eq 'mm' then $
           reads, s, minute, format='(i2)' $
         else if pattern_time[j,i] eq 'ss' then $
-          reads, s, second, format='(i2)' $
+          reads, s, isecond, format='(i2)' $
         else if pattern_time[j,i] eq 'sss' then $
-          reads, '0.'+s, fsecond, format='(f8)' $
+          reads, '0.'+s, dsecond, format='(d11)' $
         else message, 'PARSETIME FATAL ERROR: time component: '+s
         ip = ip + len
         length = length-ip
@@ -358,7 +359,7 @@ if want_date or want_time then begin
   return, failure
 endif
 
-second = fsecond + second
+second = dsecond + double(isecond)
 
 if arg_present(julian) then $
   julian = julday (month, day, year, hour, minute, second)
