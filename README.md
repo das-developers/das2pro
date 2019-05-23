@@ -12,11 +12,14 @@ To install this package using IDL 8.7.1 or above:
    `IDL> ipm, /install, 'https://github.com/das-developers/das2pro'`
 
 
-To use this package:
+To run unit tests after installation:
 
-```
-IDL> .compile das2
-IDL> .run ex02_mex_marsis_ais
+   `IDL> das2pro_ut`
+
+To run example programs:
+``
+IDL> ex01_cassini_rpws_wfrm
+IDL> ex02_mex_marsis_ais
 ```
 
 Other example are included as well see your 
@@ -24,7 +27,6 @@ Other example are included as well see your
   `$HOME/.idl/idl/packages/das2pro/examples`
   
 directory for other $MAIN$ programs.
-
 
 To remove this package:
 
