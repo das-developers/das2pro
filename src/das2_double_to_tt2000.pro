@@ -11,8 +11,8 @@
 ;      This is one of the strings 'us2000', 'mj1958', 't2000' or 't1970'
 ;    value: a DOUBLE value
 ;
-; For ISO-8601 C/D time strings use das2_text_to_tt2000 instead of this
-; function.
+; To read UTC time strings in a variety of formats use das2_text_to_tt2000
+; instead of this function.
 ;
 ; To avoid leap seconds, epoch time is first converted to a calendar
 ; representation and the broken down calendar time is converted to TT2000
