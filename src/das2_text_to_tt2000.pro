@@ -21,13 +21,13 @@ function das2_text_to_tt2000, sTime
 	compile_opt IDL2
 
 	status = das2_parsetime (sTime, Y, M, D, nDOY, nHr, nMin, rSec)
-        ; if status eq 1 return, fail
+	; if status eq 1 return, fail
 
 	nSec   = floor(rSec)
 	nMilli = floor( (rSec - nSec)*1.0D+03 )
 	nMicro = floor( (rSec - nSec)*1.0D+06 - nMilli*1.0D+03 )
 	nNano  = floor( (rSec - nSec)*1.0D+09 - nMilli*1.0D+06 - nMicro*1.0D+03 )
         
-        cdf_tt2000, nEpoch, Y, M, D, nHr, nMin, nSec, nMilli, nMicro, nNano, /COMPUTE_EPOCH
+   cdf_tt2000, nEpoch, Y, M, D, nHr, nMin, nSec, nMilli, nMicro, nNano, /COMPUTE_EPOCH
 	return, nEpoch
 end

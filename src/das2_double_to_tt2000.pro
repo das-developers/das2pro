@@ -87,8 +87,9 @@ function das2_double_to_tt2000, timeunits, value
 	; good ole debug print, remove when code works
 	;print, Y, M, D, nHr, nMin, nSec, nMilli, nMicro, nNano
 
-	CDF_TT2000, nEpoch, fix(Y), fix(M), fix(D), $
-          fix(nHr), fix(nMin), fix(nSec), fix(nMilli), fix(nMicro), fix(nNano), /COMPUTE_EPOCH
+	cdf_tt2000, nEpoch, fix(Y), fix(M), fix(D), $
+	            fix(nHr), fix(nMin), fix(nSec), $
+	            fix(nMilli), fix(nMicro), fix(nNano), /COMPUTE_EPOCH
 
 	return, nEpoch
 end
