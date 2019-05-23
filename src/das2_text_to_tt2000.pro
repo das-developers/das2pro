@@ -1,6 +1,3 @@
-; Get rid of some IDL historical oddities
-;COMPILE_OPT DEFINT32, STRICTARR
-
 ;+
 ; Description: Convert a string time value to a cdf_tt2000 epoch time
 ;
@@ -26,7 +23,7 @@ function das2_text_to_tt2000, sTime
 	nSec   = floor(rSec)
 	nMilli = floor( (rSec - nSec)*1.0D+03 )
 	nMicro = floor( (rSec - nSec)*1.0D+06 - nMilli*1.0D+03 )
-	nNano  = floor( (rSec - nSec)*1.0D+09 - nMilli*1.0D+06 - nMicro*1.0D+03 )
+	nNano  = round( (rSec - nSec)*1.0D+09 - nMilli*1.0D+06 - nMicro*1.0D+03 )
         
    cdf_tt2000, nEpoch, Y, M, D, nHr, nMin, nSec, nMilli, nMicro, nNano, /COMPUTE_EPOCH
 	return, nEpoch
