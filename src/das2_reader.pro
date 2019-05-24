@@ -1,8 +1,8 @@
 ;+
-; Aquiring and parsing a das2 stream into a dataset structure
+; Acquiring and parsing a das2 stream into a dataset list
 ;
 ; :Author:
-;    David Pisa  (IAP CAS Prague) dp@ufa.cas.cz
+;    David Pisa (IAP CAS Prague) dp@ufa.cas.cz
 ;
 ; :Copyright:
 ;    2018 - 2019 David Pisa
@@ -40,8 +40,8 @@ end
 function _das2_tagExist, struct, tag
   compile_opt idl2, hidden
 
-  ind = where(strcmp(TAG_NAMES(struct),tag, /fold_case))
-  if ind NE -1 then return, 1b else return, 0b
+  ind = where(strcmp(tag_names(struct),tag, /fold_case))
+  if ind ne -1 then return, 1b else return, 0b
 end
 
 
@@ -71,7 +71,7 @@ function _das2_typeSize, encoding
 end
 
 ;+
-; Resort and convert a byte array to an array of given type and dimension
+; Convert a byte array to an array of given type
 ;
 ; :Private:
 ;
@@ -93,7 +93,7 @@ end
 ; 
 ; :History:
 ;    Jul. 2018, D. Pisa : original
-;    May  2019, C. Piker : name change to indicate function purpose
+;    May  2019, C. Piker : updates to handle multiple time values per row
 ;-
 function _das2_decodeValues, data, sType, dim=dim, debug=debug
    compile_opt idl2, hidden
