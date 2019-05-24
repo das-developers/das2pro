@@ -185,7 +185,8 @@ function _das2_parsePackets, pks, renderer_waveform, debug=debug
       ptr_stream += 6   ; shift a stream pointer
 
       ; parse a packet header form xml to struct
-      packetHeader = (xml_parse(string(pks[ptr_stream:ptr_stream+packetHeaderSize-1]))).ToStruct(/recursive)
+      hash = xml_parse(string(pks[ptr_stream:ptr_stream+packetHeaderSize-1]))
+      packetHeader = hash.ToStruct(/recursive)
       
       ptr_stream += packetHeaderSize ; shift a stream pointer
 
