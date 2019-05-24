@@ -338,7 +338,7 @@ end
 ;-
 function das2_reader, sServer, sDataset, stime, ftime, $
    interval=interval, resolution=resolution, params=params, ascii=ascii, $
-   extras=extras, verbose=verbose, debug=debug
+   extras=extras, verbose=verbose, debug=debug, header=header
    
    compile_opt idl2
 
@@ -435,11 +435,11 @@ function das2_reader, sServer, sDataset, stime, ftime, $
       ; "NoDataInInterval" for a properly behaved stream.
       if ptrStream eq n_elements(buffer) then return, lStream
       
-      ; Bad hack for treating yTags as xOffset values.  Should be denoted
-      ; with an explicit attribute name, should update this for das2.4.
+      ; Bad hack for treating yOffset (yTags) as xOffset values.  Should be
+		; denoted with an explicit attribute name, should update this for das2.4
       if _das2_tagExist(streamHeader.stream.properties, '_string_renderer') then begin
-         if strcmp(streamHeader.stream.properties._string_renderer, 'waveform') then waveform = !true $
-         else waveform = !false
+         if strcmp(streamHeader.stream.properties._string_renderer, 'waveform') $
+			then waveform = !true else waveform = !false
       endif else waveform = !false
       
       if keyword_set(debug) then begin
@@ -448,7 +448,7 @@ function das2_reader, sServer, sDataset, stime, ftime, $
          lDataSet = _das2_parsePackets(buffer[ptrStream:*], waveform)
       endelse
       
-      if keyword_set(dataSet) then return, lStream + lDataSet else return, lStream
+      if keyword_set(header) then return, lStream else return, lStream + lDataSet
       
     endif else begin
        ; This looks like an error return case, should probably go in an output
