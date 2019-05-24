@@ -9,9 +9,9 @@ pro ex02_mex_marsis_ais
 	sMin = '2005-08-06T00:47:40'
 	sMax = '2005-08-06T01:32:40'
 
-	d = das2_reader(sServer, sDataSet, sMin, sMax)
+	l = das2_reader(sServer, sDataSet, sMin, sMax)
 
-	print, d
+	print, l
 
 end
 
