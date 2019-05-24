@@ -1,148 +1,157 @@
-FUNCTION _das2_urlCallback, status, progress, data
 ;+
-; NAME:
-;         Url_Callback
-; PURPOSE:
+; Aquiring and parsing a das2 stream into a dataset structure
 ;
-; INPUTS:
+; :Author:
+;    David Pisa  (IAP CAS Prague) dp@ufa.cas.cz
 ;
-; OUTPUTS:
+; :Copyright:
+;    2018 - 2019 David Pisa
 ;
-; MODIFICATION HISTORY:
-;
-;
+; :License:
+;    MIT
 ;-
+
+; docstrings formatted according to the guidlines at:
+; https://www.harrisgeospatial.com/docs/IDLdoc_Comment_Tags.html 
+
+;+
+; Provide feedback that the stream is downloading
+;
+; :Private:
+;-
+function _das2_urlCallback, status, progress, data
    compile_opt idl2, hidden
+	
+   print, status    ; print the info msgs from the url object
+   return, 1        ; return 1 to continue, return 0 to cancel
+end
 
-   ; print the info msgs from the url object
-   PRINT, status
-   ; return 1 to continue, return 0 to cancel
-   RETURN, 1
-END
 
-FUNCTION _das2_tagExist, struct, tag
-  ;+
-  ; NAME:
-  ;         _das2_tagExist
-  ; PURPOSE:
-  ;         Check if a tag name exists in a stucture
-  ; OUTPUTS:
-  ;           byte 1 - true, 0 - false
-  ; EXAMPLE:
-  ;
-  ; MODIFICATION HISTORY:
-  ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
-  ;
-  ;-
+; Check if a tag name exists in a stucture
+;
+; :Private:
+;
+; :Returns:
+;    byte 1 - true, 0 - false
+;
+; :History:
+;    Jul. 2018, D. Pisa : original
+;-
+function _das2_tagExist, struct, tag
   compile_opt idl2, hidden
 
   ind = where(strcmp(TAG_NAMES(struct),tag, /fold_case))
-  if ind NE -1 THEN return, 1b ELSE return, 0b
-END
+  if ind NE -1 then return, 1b else return, 0b
+end
 
-FUNCTION _das2_parseVarSize, type
-  ;+
-  ; NAME:
-  ;       _das2_parseVarSize
-  ; PURPOSE:
-  ;       check a size of variable in bytes for a given type
-  ; INPUTS:
-  ;       (STRING) type
-  ; OUTPUTS:
-  ;       (uint) number of bytes for a given Var type
-  ;
-  ; EXAMPLE:
-  ;       sz = _das2_parseVarSize('little_endian_real4')
-  ;
-  ; MODIFICATION HISTORY:
-  ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
-  ;-
+
+;+
+; Turn strings such as 'little_endian_real4' into the number of bytes required
+; to store a single data value for a stream variable.
+;
+; :Private:
+;
+; :Params:
+;    encoding : in, required, type=string
+;
+; :Returns:
+;    unit : The number of bytes for a given type
+;
+; :Example:
+;    sz = _das2_parseVarSize('little_endian_real4')
+;
+; :History:
+;    Jul. 2018 D. Pisa : original
+;-
+function _das2_parseVarSize, encoding
   compile_opt idl2, hidden
 
-  b = stregex(type, '[0-9]{1,2}$', /extract)
-  if strcmp(b, '') THEN return, 0u ELSE return, uint(b)
-END
+  b = stregex(encoding, '[0-9]{1,2}$', /extract)
+  if strcmp(b, '') then return, 0u else return, uint(b)
+end
 
-FUNCTION _das2_setVarType, data, type, dim=dim
-  ;+
-  ; NAME:
-  ;         _das2_setVarType
-  ; PURPOSE:
-  ;       resort and convert a byte stream to an array of given type and dimension
-  ; INPUTS:
-  ;       data (optional)
-  ;       type (string)
-  ; OPTIONAL INPUTS:
-  ;       dim (uint)
-  ;
-  ; OUTPUTS:
-  ;       an array of given type
-  ; EXAMPLE:
-  ;
-  ; MODIFICATION HISTORY:
-  ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
-  ;-
-  compile_opt idl2, hidden
+;+
+; Resort and convert a byte stream to an array of given type and dimension
+;
+; :Private:
+;
+; :Params:
+;    data 
+;    type (string)
+;
+; :Keywords:
+;    dim : in, optional, type=uint
+;
+; :Returns:
+;    an array of given type
+; 
+; :History:
+;    Jul. 2018, D. Pisa : original
+;-
+function _das2_setVarType, data, type, dim=dim
+   compile_opt idl2, hidden
 
-      IF NOT KEYWORD_SET(dim) then dim = 1
-      data_size = n_elements(data)
-      type_size = _das2_parseVarSize(type)
-      ;; !! big endian
-      IF stregex(type, '^big_', /boolean) THEN bige = 1 ELSE bige = 0
-      ; if number of bytes do not match type and dimension then return []
-      IF data_size / type_size NE dim THEN begin
-        print, 'Bad data conversion while reading data...'
-        return, []
-      ENDIF
+   if not keyword_set(dim) then dim = 1
+   data_size = n_elements(data)
+   type_size = _das2_parseVarSize(type)
+   ;; !! big endian
+   if stregex(type, '^big_', /boolean) then bige = 1 else bige = 0
+   
+	; if number of bytes do not match type and dimension then return []
+   if data_size / type_size NE dim then begin
+     printf, -2, 'ERROR: Bad data conversion while reading data...'
+     return, []
+   endif
 
-      IF stregex(type, '^ascii', /boolean) THEN begin
-           return, string(reform(data, type_size, dim))
-      ENDIF
+   if stregex(type, '^ascii', /boolean) then begin
+        return, string(reform(data, type_size, dim))
+   endif
 
-      IF stregex(type, 'real4$', /boolean) THEN BEGIN
-          temp = reform(data, type_size, dim)
-          IF bige THEN return, SWAP_ENDIAN(reform(float(temp, 0, 1, dim))) $
-          ELSE return, reform(float(temp, 0, 1, dim))
-      ENDIF
+   if stregex(type, 'real4$', /boolean) then begin
+       temp = reform(data, type_size, dim)
+       if bige then return, SWAP_ENDIAN(reform(float(temp, 0, 1, dim))) $
+       else return, reform(float(temp, 0, 1, dim))
+   endif
 
-      IF strcmp(type, 'ascii12') THEN begin
-        temp = strsplit(string(data), /extract)
-        if n_elements(temp) ne dim then stop
-        return, float(temp)
-      ENDIF
+   if strcmp(type, 'ascii12') then begin
+     temp = strsplit(string(data), /extract)
+     if n_elements(temp) ne dim then stop
+     return, float(temp)
+   endif
 
-      IF strcmp(type, 'time22') THEN begin
-        temp = string(data)
-        return, temp
-      ENDIF
+   if strcmp(type, 'time22') then begin
+     temp = string(data)
+     return, temp
+   endif
 
-      IF stregex(type, 'real8$', /boolean) THEN BEGIN
-          temp = reform(data, type_size, dim)
-          IF bige THEN return, SWAP_ENDIAN(reform(double(temp, 0, 1, dim))) $
-          ELSE return, reform(double(temp, 0, 1, dim))
-      ENDIF
-      ; never should reach this
-      return, []
-END
+   if stregex(type, 'real8$', /boolean) then begin
+       temp = reform(data, type_size, dim)
+       if bige then return, SWAP_ENDIAN(reform(double(temp, 0, 1, dim))) $
+       else return, reform(double(temp, 0, 1, dim))
+   endif
+   
+	; never should reach this
+   return, []
+end
 
-FUNCTION _das2_parsePackets, pks, renderer_waveform
-   ;+
-   ; NAME:
-   ;         _das2_parsePackets
-   ; PURPOSE:
-   ;
-   ; INPUTS:
-   ;
-   ; OUTPUTS:
-   ;
-   ; RESTRICTIONS:
-   ;
-   ; EXAMPLE:
-   ;
-   ; MODIFICATION HISTORY:
-   ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
-   ;     Nov. 2018 DP, fixed object->struct conversion for ypackets
-   ;-
+;+
+; Create a dataset structure from a list of packets
+;
+; :Private:
+;
+; :Params:
+;    pkts : in, required, type=
+;
+;
+; :Returns:
+;    dataset structure
+;
+; :History:
+;     Jul. 2018 : Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
+;     Nov. 2018 : DP, fixed object->struct conversion for ypackets
+;-
+
+function _das2_parsePackets, pks, renderer_waveform
    compile_opt idl2, hidden
    
    ptr_stream = 0l ; byte pointer in the stream
@@ -152,14 +161,14 @@ FUNCTION _das2_parsePackets, pks, renderer_waveform
    while ptr_stream lt stream_length do begin ; loop across the stream
       
       ; if packet does not start with [(0-9){2}] then stop
-      IF strmatch(string(pks[ptr_stream:ptr_stream+3]), '\[??\]') THEN begin
+      if strmatch(string(pks[ptr_stream:ptr_stream+3]), '\[??\]') then begin
          ptr_stream += 4
       endif else begin
          printf, -2, 'ERROR: In packet stream. Expecting packet id '+ $
                     '[01] - [99]. Got: '+ string(pks[ptr_stream:ptr_stream+3])
          stop
-         if KEYWORD_SET(d) THEN BEGIN
-            print, 'Partial results returned'
+         if keyword_set(d) then begin
+            printf, -2, 'WARNING: Partial results returned'
             return, d
          endif else return, !null
       endelse
@@ -179,11 +188,11 @@ FUNCTION _das2_parsePackets, pks, renderer_waveform
       ydata = LIST()
       zdata = LIST()
       
-      WHILE ptr_stream lt stream_length DO BEGIN
+      while ptr_stream lt stream_length DO begin
          ; expecting a binary data starting with a string :??:
          ; if a semicolom is not found possibly a new packet header occurred
          ; or en error in a stream parsing
-         IF strcmp(string(pks[ptr_stream]), ':') NE 1 THEN BREAK
+         if strcmp(string(pks[ptr_stream]), ':') NE 1 then BREAK
          ; shift a stream pointer
          ptr_stream += 4
          ; parse a type of x variable, typically time
@@ -193,23 +202,23 @@ FUNCTION _das2_parsePackets, pks, renderer_waveform
          ; shift a stream pointer
          ptr_stream += xTypeSize
          ; set a number of items stored in a packet, yscan
-         IF _das2_tagExist(packetHeader.packet, 'yscan') THEN begin
+         if _das2_tagExist(packetHeader.packet, 'yscan') then begin
             yscan = packetHeader.packet.yscan
-         ENDIF ELSE begin
+         endif else begin
             yscan = packetHeader.packet.y
-         ENDELSE
+         endelse
          
          ; set yscan to LIST, this is a hook because the packet scheme
-         IF SIZE(yscan, /type) NE 11 THEN yscan = LIST(yscan)
+         if SIZE(yscan, /type) NE 11 then yscan = LIST(yscan)
          
-         FOR j=0, yscan.Count()-1 DO BEGIN
+         FOR j=0, yscan.Count()-1 DO begin
             yscan_struct = yscan[j];.ToStruct()
-            IF SIZE(yscan_struct, /type) EQ 11 THEN yscan_struct = yscan_struct->ToStruct()
-            IF _das2_tagExist(yscan_struct, '_nitems') THEN BEGIN
+            if SIZE(yscan_struct, /type) EQ 11 then yscan_struct = yscan_struct->ToStruct()
+            if _das2_tagExist(yscan_struct, '_nitems') then begin
                 nitems = yscan_struct._nitems
-            ENDIF ELSE begin
+            endif else begin
                 nitems = 1
-            ENDELSE
+            endelse
             yTypeSize = _das2_parseVarSize(yscan_struct._type)
             
             ; !! NEEDS to be updated
@@ -221,159 +230,158 @@ FUNCTION _das2_parsePackets, pks, renderer_waveform
                dim=nitems $
             )
             
-            IF not KEYWORD_SET(z) THEN begin
+            if not keyword_set(z) then begin
                return, !NULL
-            ENDIF
+            endif
             
            ; shift a stream pointer
-           IF ptr_data EQ 0 THEN BEGIN
+           if ptr_data EQ 0 then begin
               zdata.add, LIST(z)
-           ENDIF ELSE begin
+           endif else begin
               zdata[j].add, z
-           ENDELSE
+           endelse
            ptr_stream += yTypeSize * nitems
            
-           IF j EQ 0 THEN tempz ELSE list_tempz.add, tempz
+           if j EQ 0 then tempz else list_tempz.add, tempz
            
-         ENDFOR
+         endfor
          ptr_data += 1
       
-      ENDWHILE
+      endwhile
       
-      IF n_elements(xdata) NE 0 THEN BEGIN
+      if n_elements(xdata) NE 0 then begin
          x = reform(xdata->ToArray())
          yscan = yscan[0]
          
-         IF renderer_waveform EQ 1 THEN begin
+         if renderer_waveform EQ 1 then begin
             y = findgen(yscan._nitems) * yscan._YTAGINTERVAL
-         ENDIF ELSE BEGIN
-            IF  _das2_tagExist(packetHeader.packet, 'yscan') THEN BEGIN
-               IF _das2_tagExist(yscan, '_ytags') THEN begin
+         endif else begin
+            if  _das2_tagExist(packetHeader.packet, 'yscan') then begin
+               if _das2_tagExist(yscan, '_ytags') then begin
                   y = float(strsplit(yscan[0]._ytags, ',', /extract))
-               ENDIF ELSE BEGIN
+               endif else begin
                   y = yscan._ytagmin + findgen(yscan._nitems) * yscan._YTAGINTERVAL
-               ENDELSE
-            ENDIF
-         ENDELSE
+               endelse
+            endif
+         endelse
 
-         ;IF not KEYWORD_SET(x) THEN x = -1 ;ELSE x = reform(xdata->ToArray())
-         IF not KEYWORD_SET(y) THEN y = -1 ;ELSE y = reform(ydata->ToArray())
-         IF not KEYWORD_SET(z) THEN z = -1 ELSE z = reform(zdata->ToArray())
+         ;if not keyword_set(x) then x = -1 ;else x = reform(xdata->ToArray())
+         if not keyword_set(y) then y = -1 ;else y = reform(ydata->ToArray())
+         if not keyword_set(z) then z = -1 else z = reform(zdata->ToArray())
 
-         IF ptr_packet EQ 0 THEN begin
-            d = LIST(CREATE_STRUCT('xdata', x, 'ydata', y, 'zdata', z, packetHeader)) 
-         endif ELSE BEGIN
-            d.ADD, CREATE_STRUCT('xdata', x, 'ydata', y, 'zdata', z, packetHeader)
-         ENDELSE
+         if ptr_packet EQ 0 then begin
+            d = LIST(create_struct('xdata', x, 'ydata', y, 'zdata', z, packetHeader)) 
+         endif else begin
+            d.ADD, create_struct('xdata', x, 'ydata', y, 'zdata', z, packetHeader)
+         endelse
       
-      ENDIF ELSE begin
-         IF ptr_packet EQ 0 THEN begin
+      endif else begin
+         if ptr_packet EQ 0 then begin
             d = LIST(packetHeader) 
-         endif ELSE BEGIN
+         endif else begin
             d.ADD, packetHeader
-         ENDELSE
+         endelse
          
-      ENDELSE
+      endelse
       
       ptr_packet +=1
    endwhile
    return, d
-END
+end
 
-FUNCTION das2_reader, sServer, sDataset, stime, ftime, $
+
+;+
+; Request data from a specific das2 server using native HTTP GET parameters
+; 
+; :Params:
+;	  sServer:  in, required, type=string
+;    sDataset: in, required, type=string
+;    stime: in, required, type=string
+;    ftime: in, required, type=string
+;
+; :Keywords:
+;    params: in, optional, type=list
+;    ascii: in, optional, type=boolean
+;    extras: in, optional, type=list
+;    verbose: in, optional, type=boolean
+;
+; :Requires:
+;    xml_parse: IDL 8.6.1
+;    IDLnetURL: IDL 6.4
+;
+; :History:
+;    Jul. 2018, D. Pisa : original
+;    May  2019, C. Piker: added server selection parameter
+;-
+function das2_reader, sServer, sDataset, stime, ftime, $
    interval=interval, resolution=resolution, params=params, ascii=ascii, $
    extras=extras, verbose=verbose
    
-   ;+
-   ; NAME:
-   ;           das2_reader
-   ; PURPOSE:
-   ;
-   ; INPUTS:
-   ;
-   ; OPTIONAL INPUTS:
-   ;
-   ; KEYWORD PARAMETERS:
-   ;
-   ; OUTPUTS:
-   ;
-   ; RESTRICTIONS:
-   ;           xml_parse: introduced in version 8.6.1
-   ;           IDLnetURL: introduced in version 6.4
-   ; PROCEDURE:
-   ;
-   ; EXAMPLE:
-   ;
-   ; MODIFICATION HISTORY:
-   ;     Jul. 2018 Written by D. Pisa (IAP CAS Prague) dp@ufa.cas.cz
-   ;     May  2019 C. Piker: added server selection parameter
-   ;
-   ;-
-   compile_opt IDL2
+   compile_opt idl2
 
    ; catch exceptions
    ;CATCH, errorStatus
    errorStatus = 0
 
-;  IF float(!version.release) LT 8.6 THEN begin
+;  if float(!version.release) LT 8.6 then begin
 ;     print, 'Das2reader does not support earlier IDL version than 8.6!'
 ;     return, !null
-;  ENDIF
+;  endif
 
    ; Test a number of input parameters, if < 3 printout help
-   IF N_PARAMS() LT 3 THEN begin
-      PRINT, 'No parameters'
-      RETURN, !NULL
-   ENDIF
+   if N_PARAMS() LT 3 then begin
+      printf, -2, 'ASSERT: No parameters'
+      return, !NULL
+   endif
 
-   IF KEYWORD_SET(VERBOSE) THEN VERBOSE = 1 ELSE VERBOSE = 0
+   if keyword_set(VERBOSE) then VERBOSE = 1 else VERBOSE = 0
 
    url_host = sServer
    url_path = '?server=dataset&'
    url_path += 'dataset='+sDataset
-   IF KEYWORD_SET(interval) THEN url_path += '&interval='+string(interval)
+   if keyword_set(interval) then url_path += '&interval='+string(interval)
    if keyword_set(resolution) then begin 
       if (resolution > 0.0) then url_path += '&resolution='+strtrim(string(resolution), 2)
    endif
         
-   IF KEYWORD_SET(params) THEN url_path += '&params=' + IDLnetURL.URLEncode(STRJOIN('--'+params+' ', /SINGLE))
-   IF KEYWORD_SET(ascii) THEN url_path += '&ascii=1'
+   if keyword_set(params) then url_path += '&params=' + IDLnetURL.URLEncode(STRJOIN('--'+params+' ', /SINGLE))
+   if keyword_set(ascii) then url_path += '&ascii=1'
    url_path += '&start_time=' + stime
    url_path += '&end_time=' + ftime
 
    ; url_path = 'http://planet.physics.uiowa.edu/das/das2Server?server=dataset&params=10khz&dataset=Cassini/RPWS/HiRes_MidFreq_Waveform&start_time=2008-08-10T09:06:00.000Z&end_time=2008-08-10T09:13:00.000Z'
    ; url_path = 'http://planet.physics.uiowa.edu/das/das2Server?server=dataset&dataset=Cassini/RPWS/HiRes_HiFreq_Spectra&start_time=2008-08-10T09:00:00.000Z&end_time=2008-08-10T10:00:00.000Z'
-   IF (errorStatus NE 0) THEN BEGIN
-     CATCH, /CANCEL
-   ; Display the error msg in a dialog and in the IDL output log
-   r = DIALOG_MESSAGE(!ERROR_STATE.msg, TITLE='URL Error', /ERROR)
-   IF VERBOSE THEN PRINT, !ERROR_STATE.msg
-   ; Get the properties that will tell us more about the error.
-   oUrl->GetProperty, RESPONSE_CODE=rspCode, $
+   if (errorStatus NE 0) then begin
+      CATCH, /CANCEL
+      ; Display the error msg in a dialog and in the IDL output log
+      r = DIALOG_MESSAGE(!ERROR_STATE.msg, TITLE='URL Error', /ERROR)
+      if VERBOSE then print, !ERROR_STATE.msg
+      ; Get the properties that will tell us more about the error.
+      oUrl->GetProperty, RESPONSE_CODE=rspCode, $
       RESPONSE_HEADER=rspHdr, RESPONSE_FILENAME=rspFn
-   IF VERBOSE THEN BEGIN
-      PRINT, 'rspCode = ', rspCode
-      PRINT, 'rspHdr= ', rspHdr
-      PRINT, 'rspFn= ', rspFn
-   ENDIF
-   ; Destroy the url object
-   OBJ_DESTROY, oUrl
+      if VERBOSE then begin
+         print, 'rspCode = ', rspCode
+         print, 'rspHdr= ', rspHdr
+         print, 'rspFn= ', rspFn
+      endif
+      ; Destroy the url object
+      OBJ_DESTROY, oUrl
 
-   RETURN, !null
-   ENDIF
+      return, !null
+   endif
 
    oUrl = OBJ_NEW('IDLnetURL')
 
-   IF VERBOSE THEN BEGIN
+   if VERBOSE then begin
      oUrl->SetProperty, CALLBACK_FUNCTION='_das2_urlCallback'
      oUrl->SetProperty, VERBOSE=1
-   ENDIF
+   endif
 
-   IF KEYWORD_SET(extras) THEN begin
+   if keyword_set(extras) then begin
        oUrl->SetProperty, URL_USERNAME=extras.USERNAME
        oUrl->SetProperty, URL_PASSWORD=extras.PASSWORD
        oUrl->setProperty, URL_PORT=extras.port
-   ENDIF
+   endif
 
    sUrl = url_host + url_path
    printf, -2, "INFO: Requesting "+sUrl
@@ -381,25 +389,26 @@ FUNCTION das2_reader, sServer, sDataset, stime, ftime, $
    buffer = oUrl->get(URL=sUrl, /buffer)
    ;save, buffer, file='buffer_wbr.sav'
    ;restore, 'buffer_wbr.sav', /v
-   OBJ_DESTROY, oUrl
+   obj_destroy, oUrl
    streamSize = n_elements(buffer)
-   IF strcmp(string(buffer[0:3]), '[00]') NE 1 AND strcmp(string(buffer[0:3]), '[xx]') NE 1 THEN begin
-       print, 'Invalid Das2 stream! Expected [00]. Got: '+string(buffer[0:3])
+   if strcmp(string(buffer[0:3]), '[00]') NE 1 AND strcmp(string(buffer[0:3]), '[xx]') NE 1 then begin
+       printf, -2, 'ERROR: Invalid Das2 stream! Expected [00]. Got: '+string(buffer[0:3])
        return, !null
-   ENDIF
+   endif
    streamHeaderSize = long(string(buffer[4:9])) ; fixed lenght for stream header size
    streamHeader = (xml_parse(string(buffer[10:10+streamHeaderSize-1])))->ToStruct(/recursive)
-   IF _das2_tagExist(streamHeader, 'stream') THEN BEGIN
+   if _das2_tagExist(streamHeader, 'stream') then begin
       stream = LIST(streamHeader)
       ptrStream = 10 + streamHeaderSize
-      IF ptrStream eq n_elements(buffer) THEN return, stream
-      IF _das2_tagExist(streamHeader.stream.properties, '_string_renderer') THEN BEGIN
-         IF strcmp(streamHeader.stream.properties._string_renderer, 'waveform') THEN waveform = 1 $
-         ELSE waveform = 0
-       ENDIF ELSE waveform = 0
+      if ptrStream eq n_elements(buffer) then return, stream
+      if _das2_tagExist(streamHeader.stream.properties, '_string_renderer') then begin
+         if strcmp(streamHeader.stream.properties._string_renderer, 'waveform') then waveform = 1 $
+         else waveform = 0
+       endif else waveform = 0
         dataSet = _das2_parsePackets(buffer[ptrStream:*], waveform)
-      IF KEYWORD_SET(dataSet) THEN RETURN, stream + dataSet ELSE RETURN, stream
-    ENDIF ELSE begin
-      RETURN, string(buffer)
-    ENDELSE
-  END
+      if keyword_set(dataSet) then return, stream + dataSet else return, stream
+    endif else begin
+      return, string(buffer)
+    endelse
+
+end
