@@ -1,15 +1,25 @@
-;+
-; Acquiring and parsing a das2 stream into a dataset list
+; The MIT License
 ;
-; :Author:
-;    David Pisa (IAP CAS Prague) dp@ufa.cas.cz
+; Copyright 2018-2019 David Pisa (IAP CAS Prague) dp@ufa.cas.cz
 ;
-; :Copyright:
-;    2018 - 2019 David Pisa
+; Permission is hereby granted, free of charge, to any person obtaining a copy
+; of this software and associated documentation files (the "Software"), to deal
+; in the Software without restriction, including without limitation the rights
+; to use, copy, modify, merge, publish, distribute, sublicense, and/or sell 
+; copies of the Software, and to permit persons to whom the Software is 
+; furnished to do so, subject to the following conditions:
 ;
-; :License:
-;    MIT
-;-
+; The above copyright notice and this permission notice shall be included in 
+; all copies or substantial portions of the Software.
+;
+; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+; AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+; SOFTWARE.
+
 
 ; docstrings formatted according to the guidlines at:
 ; https://www.harrisgeospatial.com/docs/IDLdoc_Comment_Tags.html 
@@ -156,9 +166,13 @@ end
 ;     Nov. 2018, D. Pisa : fixed object.struct conversion for ypackets
 ;-
 
-function _das2_parsePackets, pks, renderer_waveform, debug=debug
+function _das2_parsePackets, tStreamHdr, pks, renderer_waveform, debug=debug
    compile_opt idl2, hidden
    
+	; Hash map of packet is to dataset objects.  Note that if a packet is
+	; redifined we need to 
+	dDataSets = list()
+	
    ptr_stream = 0l ; byte offset in the stream
    ptr_packet = 0l ; number of packets
    stream_length = n_elements(pks) ; number of bytes in the stream
@@ -326,8 +340,8 @@ end
 ;    verbose: in, optional, type=boolean
 ;
 ; :Returns:
-;    A list of structures.  Each structure corresponds to one dataset in the 
-;    stream
+;    A list of dataset objects.  Each dataset object corresponds to a single
+;    packet type in the input.
 ;
 ; :Requires:
 ;    xml_parse: IDL 8.6.1
@@ -444,12 +458,12 @@ function das2_reader, sServer, sDataset, stime, ftime, $
       endif else waveform = !false
       
       if keyword_set(debug) then begin
-         lDataSet = _das2_parsePackets(buffer[ptrStream:*], waveform, debug)
+         lDataSet = _das2_parsePackets(lStream, buffer[ptrStream:*], waveform, debug)
       endif else begin
-         lDataSet = _das2_parsePackets(buffer[ptrStream:*], waveform)
+         lDataSet = _das2_parsePackets(lStream, buffer[ptrStream:*], waveform)
       endelse
       
-      if keyword_set(header) then return, lStream else return, lStream + lDataSet
+      return, lDataSet 
       
     endif else begin
        ; This looks like an error return case, should probably go in an output

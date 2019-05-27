@@ -9,9 +9,17 @@ pro ex02_mex_marsis_ais
 	sMin = '2005-08-06T00:47:40'
 	sMax = '2005-08-06T01:32:40'
 
-	l = das2_reader(sServer, sDataSet, sMin, sMax)
+	lDs = das2_read_server(sServer, sDataSet, sMin, sMax)
 
-	print, l
+	print, n_elements(l), /format="%d datesets downloaded"
 
+	; There is typically only one dataset for homogeneous streams
+	ds = lDs[0]
+	
+	; Let's see what it contains
+	print, ds
+	
+	
+	
 end
 

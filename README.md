@@ -14,7 +14,7 @@ working copy area issue:
 ```
 $ git clone https://github.com/das-developers/das2pro.git
 $ cd das2pro
-$ env IDL_PATH="<IDL_DEFAULT>:$(pwd)/src" idl87
+$ env IDL_PATH="<IDL_DEFAULT>:$(pwd)/src:$(pwd)/examples" idl87
 IDL> das2pro_ut              ;running unit tests
 IDL> ex02_mex_marsis_ais     ;for example
 ```
@@ -39,6 +39,7 @@ and use the following to run one or more of the included example programs:
 ```
 IDL> ex01_cassini_rpws_wfrm
 IDL> ex02_mex_marsis_ais
+IDL> ex03_rbsp_ephem_loc
 ```
 which generate output PNG images into your current directory.
 
