@@ -9,9 +9,12 @@ pro ex02_mex_marsis_ais
 	sMin = '2005-08-06T00:47:40'
 	sMax = '2005-08-06T01:32:40'
 
-	lDs = das2_read_server(sServer, sDataSet, sMin, sMax)
+	; Query for data.  The sMsg varible will hold any error or message
+	; data returned from the server.  Typically this is empty unless an
+	; error occurs.
+	lDs = das2_readserver(sServer, sDataSet, sMin, sMax, /messages=sMsg)
 
-	print, n_elements(l), /format="%d datesets downloaded"
+	print, n_elements(l), /format="%d datesets read"
 
 	; There is typically only one dataset for homogeneous streams
 	ds = lDs[0]

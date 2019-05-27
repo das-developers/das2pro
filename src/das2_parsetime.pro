@@ -23,57 +23,57 @@
 
 function das2_parsetime, timestr, year, month, day, doy, hour, minute, $
   second, julian=julian, debug=debug
-
 ;+
-; NAME:
-;	DAS2_PARSETIME
+; Given a string, parse typical delimited ASCII date/time and
+; return year, month, day of month, day of year, hour, minute, second.
 ;
-; PURPOSE:
-;	Given a string, parse typical delimited ASCII date/time and
-;	return year, month, day of month, day of year, hour, minute, second.
+; This function loads JULDAY and CALDAT as dependencies and prints error or
+; debug messages to stderr.
 ;
-; CALLING SEQUENCE:
-;	status = das2_parsetime (timestr, year, month, day_month, day_year $
-;               [, hour, minute, second] [, julian=julian] [, /debug])
+; :Params:
+;   timestr: in, required, type=string
+;	    Either 4-digit or 2-digit years can be parsed.  4-digit years must be in 
+;      the range range 1900 through 2199, and 2-digit years are only allowed in
+;      the range 1960 through 2059.
 ;
-; INPUTS:
-;	TIMESTR: string containing date and time
+;   year: out, required, type=integer
+;      Year like 2000
 ;
-;       /DEBUG: print debug info to stderr
+;	 month: out, required, type=integer
+;      Month of year (1 through 12)
 ;
-; OUTPUTS:
-;	YEAR: Year like 2000
+;   day: out, required, type=integer
+;      Day of month (1 through 31)
 ;
-;	MONTH: Month of year (1 through 12)
+;   doy: out, required, type=integer
+;      Day of year (1 through 366)
 ;
-;	DAY: Day of month (1 through 31)
+;   hour: out, required, type=integer
+;      Hour of day (0 through 23)
 ;
-;	DOY: Day of year (1 through 366)
+;   minute: out, required, type=integer
+;      Minute of hour (0 through 59)
 ;
-;	HOUR: Hour of day (0 through 23)
+;   second: out, required, type=double
+;      Second of minute (0.0d0 to 61.0d0)
 ;
-;	MINUTE: Minute of hour (0 through 59)
+; :Keywords:
+;    julian: out, optional, type=double
+;       Double precision fractional Julian Day
 ;
-;	SECOND: Second of minute (0.0d0 to 61.0d0)
+;    debug: in, optional, type=bool
+;       Turn on certian debug output strings
 ;
-;	JULIAN: Double precision fractional Julian Day
+; :Returns:
+;    integer: 0 on success, 1 on failure
 ;
-; SIDE EFFECTS:
-;	Loads JULDAY and CALDAT as dependencies.
-;	Prints error or debug messages to stderr.
+; :Examples:
+;     status = das2_parsetime (timestr, year, month, day_month, day_year $
+;              [, hour, minute, second] [, julian=julian] [, /debug])
 ;
-; RESTRICTIONS:
-;	Years only in range 1900 through 2199.
-;       Two-digit years only in range 1960 through 2059.
-;
-; EXAMPLE:
-;
-; PROCEDURE:
-;
-; REVISION HISTORY:
-;	2012-10-30 Rewrite using regex.  L. Granroth
-;	2019-05-23 Extended to handle nanoseconds.  LJG
-;
+; :History:
+;	2012-10-30, L. Granroth: Rewrite using regex
+;	2019-05-23, L. Granroth: Extended to handle nanoseconds
 ;-
 
 compile_opt IDL2

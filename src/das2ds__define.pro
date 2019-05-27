@@ -22,7 +22,7 @@
 
 
 ;+
-; Class for holding datasets returned from a das2 or hapi server
+; Class for holding datasets returned from a das2, hapi server
 ;
 ;-
 

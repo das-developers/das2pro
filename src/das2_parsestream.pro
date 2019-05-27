@@ -21,22 +21,6 @@
 ; SOFTWARE.
 
 
-; docstrings formatted according to the guidlines at:
-; https://www.harrisgeospatial.com/docs/IDLdoc_Comment_Tags.html 
-
-;+
-; Provide feedback that the stream is downloading
-;
-; :Private:
-;-
-function _das2_urlCallback, status, progress, data
-   compile_opt idl2, hidden
-   
-   print, status    ; print the info msgs from the url object
-   return, 1        ; return 1 to continue, return 0 to cancel
-end
-
-
 ; Check if a tag name exists in a stucture
 ;
 ; :Private:
@@ -78,6 +62,71 @@ function _das2_typeSize, encoding
 
   b = stregex(encoding, '[0-9]{1,2}$', /extract)
   if strcmp(b, '') then return, 0u else return, uint(b)
+end
+
+
+;+
+; Create an approprate dataset object by inspecting stream and packet
+; headers structures
+;
+; :Private:
+;
+; :Returns:
+;    A das2ds object
+;+
+function das2_ds_from_hdrs, dStreamHdr, dPkthdr
+	ds = das2ds()
+	
+	; Setting up dimensions
+	;
+	; <x>  -> X centers
+	;
+	; When: <stream><properties>renderer=waveform  (Just...wow)
+	; <yscan> yTags, yInterval, yMin -> X offsets
+	
+	; Handling the Y axis...
+	; <y> -> Y center
+	; <yscan> yTags, yInterval, yMin -> Y offsets
+
+	; Handling the Z axis...
+	; <z> -> Z center
+	; <yscan> -> Z center
+	
+	
+	; X
+	bXOffset = !false
+	if dStreamHdr.haskey('properties') then begin
+		d = dStreamHdr['properties']
+		if d.haskey('renderer') then bXOffset = (d['renderer'] eq 'waveform')
+	endif
+	
+	
+	
+	if dStreamHdr.haskey('properties') then begin
+	
+		; there's probably a better hash key iteration idiom than this in IDL
+		d = dStreamHdr['properties']
+		k = d.keys()
+		for i= 0,n_elements(k) - 1 do begin
+			sType = 'string'
+	   	sKey = k[i]
+			sVal = d[k[i]]
+			
+			; this is dumb, das2 streams need to follow proper XML rules -cwp
+			lTmp = strsplit(sKey, ':')
+			if n_elements(lTmp) > 1 then begin
+				sType = lTmp[0]
+				sKey = lTmp[1]
+			endif
+			
+			; For stuff that's not tagged as part of an axis, just add it's
+			; properties to the top level dataset
+			sAx = sKey.charat(0) 
+			if (sAx ne 'x') and (sAx ne 'y') and (sAx ne 'z') then &
+				ds.props[sKey] = das2_makeprop(sType,  sVal)
+		endfor
+	endif
+
 end
 
 ;+
@@ -166,12 +215,19 @@ end
 ;     Nov. 2018, D. Pisa : fixed object.struct conversion for ypackets
 ;-
 
-function _das2_parsePackets, tStreamHdr, pks, renderer_waveform, debug=debug
+function _das2_parsePackets, $
+   hStreamHdr, pks, renderer_waveform, debug=debug, messages=messages
+                             
    compile_opt idl2, hidden
    
-	; Hash map of packet is to dataset objects.  Note that if a packet is
-	; redifined we need to 
-	dDataSets = list()
+	; A hash map of packet IDs to dataset objects.  Holds the current dataset
+	; map.  If a packet ID is redefined a new dataset is placed here.
+	dDataSets = hash()
+	
+	; All the datasets read from the stream, not just the curent definitions.
+	lAllDs = list()  
+	
+	messages = ''
 	
    ptr_stream = 0l ; byte offset in the stream
    ptr_packet = 0l ; number of packets
@@ -195,21 +251,29 @@ function _das2_parsePackets, tStreamHdr, pks, renderer_waveform, debug=debug
       endelse
       
       ; number of bytes for a packet header
-      packetHeaderSize = long(string(pks[ptr_stream:ptr_stream+5]))
+      pktHdrSz = long(string(pks[ptr_stream:ptr_stream+5]))
       ptr_stream += 6   ; shift a stream pointer
 
       ; parse a packet header form xml to struct
-      hash = xml_parse(string(pks[ptr_stream:ptr_stream+packetHeaderSize-1]))
-      packetHeader = hash.ToStruct(/recursive)
+      hPktHdr = xml_parse(string(pks[ptr_stream:ptr_stream+pktHdrSz-1]))
+      hPktHdr = hPktHdr.ToStruct(/recursive)
       
-      ptr_stream += packetHeaderSize ; shift a stream pointer
+      ptr_stream += pktHdrSz ; shift a stream pointer
 
       ptr_data = 0L  ; reset data pointer
       
-      ; A comment packet, some of these contain messages that should go to the
-      ; standard error channel, but just ignore them for now
-      if strcmp('xx', sPktId, /fold_case) then continue
+      ; A comment packet send to the message variable.  Need to implement
+		; throwing away progress messages so they don't obsure important error
+		; messages.
+      if strcmp('xx', sPktId, /fold_case) then begin
+			messages += string(tPktHdr)
+			continue
+		endif 
       
+		; Looks like we have a data packet HDR, create a dateset object to store
+		; it's values, save off any needed header info
+		ds = das2_ds_from_hdrs(hStreamHdr, hPkthdr)
+		
       ; loop across a stream
       xdata = list()
       ydata = list()
@@ -224,19 +288,19 @@ function _das2_parsePackets, tStreamHdr, pks, renderer_waveform, debug=debug
          ; shift a stream pointer
          ptr_stream += 4
          ; parse a type of x variable, typically time
-         xTypeSize = _das2_typeSize(packetHeader.packet.x._type)
+         xTypeSize = _das2_typeSize(pktHdr.packet.x._type)
          if keyword_set(debug) then printf, -2, xTypeSize, format='DEBUG: xTypeSize = %s'
          
          ; !!! this is a tricky part, need to set variable type properly
-         xdata.add, _das2_decodeValues(pks[ptr_stream:ptr_stream+xTypeSize-1], packetHeader.packet.x._type)
+         xdata.add, _das2_decodeValues(pks[ptr_stream:ptr_stream+xTypeSize-1], pktHdr.packet.x._type)
  
          ptr_stream += xTypeSize ; shift a stream pointer
          
          ; set a number of items stored in a packet, yscan
-         if _das2_tagExist(packetHeader.packet, 'yscan') then begin
-            yscan = packetHeader.packet.yscan
+         if _das2_tagExist(pktHdr.packet, 'yscan') then begin
+            yscan = pktHdr.packet.yscan
          endif else begin
-            yscan = packetHeader.packet.y
+            yscan = pktHdr.packet.y
          endelse
          
          ; set yscan to LIST, this is a hook because the packet scheme
@@ -290,7 +354,7 @@ function _das2_parsePackets, tStreamHdr, pks, renderer_waveform, debug=debug
          if renderer_waveform EQ 1 then begin
             y = findgen(yscan._nitems) * yscan._YTAGINTERVAL
          endif else begin
-            if  _das2_tagExist(packetHeader.packet, 'yscan') then begin
+            if  _das2_tagExist(pktHdr.packet, 'yscan') then begin
                if _das2_tagExist(yscan, '_ytags') then begin
                   y = float(strsplit(yscan[0]._ytags, ',', /extract))
                endif else begin
@@ -304,16 +368,16 @@ function _das2_parsePackets, tStreamHdr, pks, renderer_waveform, debug=debug
          if not keyword_set(z) then z = -1 else z = reform(zdata.ToArray())
 
          if ptr_packet eq 0 then begin
-            d = list(create_struct('xdata', x, 'ydata', y, 'zdata', z, packetHeader)) 
+            d = list(create_struct('xdata', x, 'ydata', y, 'zdata', z, tPktHdr)) 
          endif else begin
-            d.add, create_struct('xdata', x, 'ydata', y, 'zdata', z, packetHeader)
+            d.add, create_struct('xdata', x, 'ydata', y, 'zdata', z, tPktHdr)
          endelse
       
       endif else begin
          if ptr_packet eq 0 then begin
-            d = list(packetHeader) 
+            d = list(tPktHdr) 
          endif else begin
-            d.add, packetHeader
+            d.add, tPktHdr
          endelse
          
       endelse
@@ -323,153 +387,62 @@ function _das2_parsePackets, tStreamHdr, pks, renderer_waveform, debug=debug
    return, d
 end
 
-
 ;+
-; Request data from a specific das2 server using native HTTP GET parameters
-; 
-; :Params:
-;    sServer:  in, required, type=string
-;    sDataset: in, required, type=string
-;    stime: in, required, type=string
-;    ftime: in, required, type=string
-;
-; :Keywords:
-;    params: in, optional, type=list
-;    ascii: in, optional, type=boolean
-;    extras: in, optional, type=list
-;    verbose: in, optional, type=boolean
+; Parse the contents of a byte buffer into a list of das2 dataset (das2ds) 
+; objects.  This is an all-at-once parser that can't handle datasets larger
+; than around 1/2 to 1/3 of the host machines ram. 
 ;
 ; :Returns:
-;    A list of dataset objects.  Each dataset object corresponds to a single
-;    packet type in the input.
-;
-; :Requires:
-;    xml_parse: IDL 8.6.1
-;    IDLnetURL: IDL 6.4
-;
-; :History:
-;    Jul. 2018, D. Pisa : original
-;    May  2019, C. Piker: added server selection parameter
+;    list - a list of das2 dataset (das2ds) objects.
 ;-
-function das2_reader, sServer, sDataset, stime, ftime, $
-   interval=interval, resolution=resolution, params=params, ascii=ascii, $
-   extras=extras, verbose=verbose, debug=debug, header=header
-   
-   compile_opt idl2
+function das2_parsestream, buffer, MESSAGES=messages
 
-   ; catch exceptions
-   ;CATCH, errorStatus
-   errorStatus = 0
-
-;  if float(!version.release) LT 8.6 then begin
-;     print, 'Das2reader does not support earlier IDL version than 8.6!'
-;     return, !null
-;  endif
-
-   ; Test a number of input parameters, if < 3 printout help
-   if n_params() lt 3 then begin
-      printf, -2, 'ASSERT: No parameters'
-      return, !NULL
-   endif
-
-   if keyword_set(VERBOSE) then VERBOSE = 1 else VERBOSE = 0
-
-   url_host = sServer
-   url_path = '?server=dataset&'
-   url_path += 'dataset='+sDataset
-   if keyword_set(interval) then url_path += '&interval='+string(interval)
-   if keyword_set(resolution) then begin 
-      if (resolution > 0.0) then url_path += '&resolution='+strtrim(string(resolution), 2)
-   endif
-        
-   if keyword_set(params) then url_path += '&params=' + IDLnetURL.URLEncode(STRJOIN('--'+params+' ', /SINGLE))
-   if keyword_set(ascii) then url_path += '&ascii=1'
-   url_path += '&start_time=' + stime
-   url_path += '&end_time=' + ftime
-
-   ; url_path = 'http://planet.physics.uiowa.edu/das/das2Server?server=dataset&params=10khz&dataset=Cassini/RPWS/HiRes_MidFreq_Waveform&start_time=2008-08-10T09:06:00.000Z&end_time=2008-08-10T09:13:00.000Z'
-   ; url_path = 'http://planet.physics.uiowa.edu/das/das2Server?server=dataset&dataset=Cassini/RPWS/HiRes_HiFreq_Spectra&start_time=2008-08-10T09:00:00.000Z&end_time=2008-08-10T10:00:00.000Z'
-   if (errorStatus NE 0) then begin
-      CATCH, /CANCEL
-      ; Display the error msg in a dialog and in the IDL output log
-      r = DIALOG_MESSAGE(!ERROR_STATE.msg, TITLE='URL Error', /ERROR)
-      if VERBOSE then print, !ERROR_STATE.msg
-      ; Get the properties that will tell us more about the error.
-      oUrl.GetProperty, RESPONSE_CODE=rspCode, $
-      RESPONSE_HEADER=rspHdr, RESPONSE_FILENAME=rspFn
-      if VERBOSE then begin
-         print, 'rspCode = ', rspCode
-         print, 'rspHdr= ', rspHdr
-         print, 'rspFn= ', rspFn
-      endif
-      ; Destroy the url object
-      OBJ_DESTROY, oUrl
-
-      return, !null
-   endif
-
-   oUrl = IDLnetURL()  ; object creation
-
-   if VERBOSE then begin
-     oUrl.SetProperty, CALLBACK_FUNCTION='_das2_urlCallback'
-     oUrl.SetProperty, VERBOSE=1
-   endif
-
-   if keyword_set(extras) then begin
-       oUrl.SetProperty, URL_USERNAME=extras.USERNAME
-       oUrl.SetProperty, URL_PASSWORD=extras.PASSWORD
-       oUrl.SetProperty, URL_PORT=extras.port
-   endif
-
-   sUrl = url_host + url_path
-   printf, -2, "INFO: Requesting "+sUrl
-   
-   ; Should maybe change this so to callback processing so the whole stream is
-   ; not buffered in memory twice but is put in data arrays as read. -cwp
-   buffer = oUrl.get(URL=sUrl, /buffer)
-   
-   ;save, buffer, file='buffer_wbr.sav'
-   ;restore, 'buffer_wbr.sav', /v
-   obj_destroy, oUrl
-   
+	messages = ""
+	
    nStreamSz = n_elements(buffer)
    if strcmp(string(buffer[0:3]), '[00]') NE 1 AND $
       strcmp(string(buffer[0:3]), '[xx]') NE 1 then begin
-       printf, -2, 'ERROR: Invalid Das2 stream! Does not start with [00]. Got: '+string(buffer[0:3])
+       printf, -2, 'ERROR: Invalid das2 stream! Does not start with [00]. Got: '+string(buffer[0:3])
        return, !null
    endif
    nStreamHdrSz = long(string(buffer[4:9])) ; fixed length for stream header size
-   streamHeader = (xml_parse(string(buffer[10:10+nStreamHdrSz-1]))).ToStruct(/recursive)
+	hStreamHdr = xml_parse(string(buffer[10:10+nStreamHdrSz-1]))
+   tStreamHdr = hStreamHdr.ToStruct(/recursive)
    
-   if _das2_tagExist(streamHeader, 'stream') then begin
-      lStream = list(streamHeader)
+   if _das2_tagExist(tStreamHdr, 'stream') then begin
       ptrStream = 10 + nStreamHdrSz
       
       ; No packets in the stream, just a header.  This is format error
       ; as there should at least be a [XX] packet (comment) that says 
       ; "NoDataInInterval" for a properly behaved stream.
-      if ptrStream eq n_elements(buffer) then return, lStream
+      if ptrStream eq n_elements(buffer) then begin
+			messages="Stream contains no packets, not even an exception message"
+			return, !null
+		endif
       
       ; Bad hack for treating yOffset (yTags) as xOffset values.  Should be
 		; denoted with an explicit attribute name, should update this for das2.4
-      if _das2_tagExist(streamHeader.stream.properties, '_string_renderer') then begin
-         if strcmp(streamHeader.stream.properties._string_renderer, 'waveform') $
+      if _das2_tagExist(tStreamHdr.stream.properties, '_string_renderer') then begin
+         if strcmp(tStreamHdr.stream.properties._string_renderer, 'waveform') $
 			then waveform = !true else waveform = !false
       endif else waveform = !false
       
       if keyword_set(debug) then begin
-         lDataSet = _das2_parsePackets(lStream, buffer[ptrStream:*], waveform, debug)
+         lDataSet = _das2_parsePackets(
+				hStreamHdr, buffer[ptrStream:*], waveform, debug=debug, messages=messages
+			)
       endif else begin
-         lDataSet = _das2_parsePackets(lStream, buffer[ptrStream:*], waveform)
+         lDataSet = _das2_parsePackets(
+				hStreamHdr, buffer[ptrStream:*], waveform, messages=messages
+			)
       endelse
       
       return, lDataSet 
       
-    endif else begin
-       ; This looks like an error return case, should probably go in an output
-       ; status message variable instead of being the return value. -cwp
-       return, string(buffer)
-       
-    endelse
-
+   endif else begin
+		messages = string(buffer)
+	   return, !null
+   endelse
+	 
 end
+
