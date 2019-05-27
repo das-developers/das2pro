@@ -74,8 +74,10 @@ end
 ; :Returns:
 ;    A das2ds object
 ;+
-function das2_ds_from_hdrs, dStreamHdr, dPkthdr
+function das2_ds_from_hdrs, dStreamHdr, dPktHdr
 	ds = das2ds()
+	
+	dPkt = pPktHdr['packet']  ; only element
 	
 	; Setting up dimensions
 	;
@@ -100,6 +102,12 @@ function das2_ds_from_hdrs, dStreamHdr, dPkthdr
 		if d.haskey('renderer') then bXOffset = (d['renderer'] eq 'waveform')
 	endif
 	
+	; Watch out. If stream contains <x><x> then the 'x' body is a list not a hash
+	if dPkt.haskey('x'):
+		
+		
+		
+		
 	
 	
 	if dStreamHdr.haskey('properties') then begin
@@ -198,7 +206,7 @@ function _das2_decodeValues, data, sType, dim=dim, debug=debug
 end
 
 ;+
-; Create a dataset structure from a list of packets
+; Create a dataset structure from a list of packets.
 ;
 ; :Private:
 ;
@@ -215,34 +223,83 @@ end
 ;     Nov. 2018, D. Pisa : fixed object.struct conversion for ypackets
 ;-
 
-function _das2_parsePackets, $
-   hStreamHdr, pks, renderer_waveform, debug=debug, messages=messages
+function _das2_parsePackets, hStreamHdr, buffer, debug=debug, messages=messages
                              
    compile_opt idl2, hidden
    
 	; A hash map of packet IDs to dataset objects.  Holds the current dataset
 	; map.  If a packet ID is redefined a new dataset is placed here.
-	dDataSets = hash()
+	dDatasets = hash()
 	
 	; All the datasets read from the stream, not just the curent definitions.
 	lAllDs = list()  
 	
 	messages = ''
 	
-   ptr_stream = 0l ; byte offset in the stream
+   iBuf = 0l       ; byte offset in the stream
    ptr_packet = 0l ; number of packets
-   stream_length = n_elements(pks) ; number of bytes in the stream
+   nBufSz = n_elements(buffer) ; number of bytes in the stream
    
-   while ptr_stream lt stream_length do begin ; loop across the stream
+   while iBuf lt nBufSz do begin ; loop across the stream
       
-      sPktId = string(pks[ptr_stream+1:ptr_stream+2])
+		sTag = string(buffer[iBuf:iBuf+3])
+		
+		if sTag.charat(0) eq '[' then begin
+			; New packet header, maybe dataset or comment
+			
+			
+			if (sTag.substring(1,2)).tolower() eq 'xx' then begin
+			
+				; it's a comment packet
+				if not _das2_handleComment(buffer, iBuf, messages) then return !null
+				
+			endif else begin
+			
+				; it's a dataset
+				nPktId = fix(sTag.substring(1,2))
+				
+				if not _das2_handleDsDef(buffer, iBuf, messages, dataset) then return !null
+				
+				; If they have re-defined a dataset that has already been defined
+				; which this ID then just skip it.
+				
+				if nPktId not in dDatasets.keys() then begin
+					dDatsets[nPktId] = dataset
+					lAllDs.add(dataset)
+				else endif 
+				
+			endelse
+		endif else begin
+		
+			if sTag.charat(0) eq ':' then begin
+				
+				; A data packet	
+				nPktId = fix(sTag.substring(1,2))
+				dataset = dDatasets[nPktId]
+				
+				if not _das2_handleData(buffer, iBuf, messages, dataset) then return !null
+				
+			endif else begin
+				; Illegal packet start character
+				messages = "Illegal character "+sTag.charat(0)+"in stream at position"+string(iBuf)
+				return !null
+			endelse
+		endelse
+	endwhile
+	
+	return lAllDs
+end
+
+	
+		
+      sPktId = string(pks[iBuf+1:iBuf+2])
       
       ; if packet does not start with [(0-9){2}] then stop
-      if strmatch(string(pks[ptr_stream:ptr_stream+3]), '\[??\]') then begin
-         ptr_stream += 4
+      if strmatch(string(pks[iBuf:iBuf+3]), '\[??\]') then begin
+         iBuf += 4
       endif else begin
          printf, -2, 'ERROR: In packet stream. Expecting packet id '+ $
-                    '[01] - [99], or [XX]. Got: '+ string(pks[ptr_stream:ptr_stream+3])
+                    '[01] - [99], or [XX]. Got: '+ string(pks[iBuf:iBuf+3])
          stop
          if keyword_set(debug) then begin
             printf, -2, 'WARNING: Partial results returned'
@@ -251,14 +308,14 @@ function _das2_parsePackets, $
       endelse
       
       ; number of bytes for a packet header
-      pktHdrSz = long(string(pks[ptr_stream:ptr_stream+5]))
-      ptr_stream += 6   ; shift a stream pointer
+      pktHdrSz = long(string(pks[iBuf:iBuf+5]))
+      iBuf += 6   ; shift a stream pointer
 
       ; parse a packet header form xml to struct
-      hPktHdr = xml_parse(string(pks[ptr_stream:ptr_stream+pktHdrSz-1]))
+      hPktHdr = xml_parse(string(pks[iBuf:iBuf+pktHdrSz-1]))
       hPktHdr = hPktHdr.ToStruct(/recursive)
       
-      ptr_stream += pktHdrSz ; shift a stream pointer
+      iBuf += pktHdrSz ; shift a stream pointer
 
       ptr_data = 0L  ; reset data pointer
       
@@ -279,22 +336,28 @@ function _das2_parsePackets, $
       ydata = list()
       zdata = list()
       
-      while ptr_stream lt stream_length do begin
+      while iBuf lt stream_length do begin
          ; expecting a binary data starting with a string :??:
          ; if a semicolom is not found possibly a new packet header occurred
          ; or en error in a stream parsing
-         if strcmp(string(pks[ptr_stream]), ':') NE 1 then break
+         if strcmp(string(pks[iBuf]), ':') NE 1 then break
          
          ; shift a stream pointer
-         ptr_stream += 4
+         iBuf += 4
+			
+			
+			
+			
+			; END of test ideas
+			
          ; parse a type of x variable, typically time
          xTypeSize = _das2_typeSize(pktHdr.packet.x._type)
          if keyword_set(debug) then printf, -2, xTypeSize, format='DEBUG: xTypeSize = %s'
          
          ; !!! this is a tricky part, need to set variable type properly
-         xdata.add, _das2_decodeValues(pks[ptr_stream:ptr_stream+xTypeSize-1], pktHdr.packet.x._type)
+         xdata.add, _das2_decodeValues(pks[iBuf:iBuf+xTypeSize-1], pktHdr.packet.x._type)
  
-         ptr_stream += xTypeSize ; shift a stream pointer
+         iBuf += xTypeSize ; shift a stream pointer
          
          ; set a number of items stored in a packet, yscan
          if _das2_tagExist(pktHdr.packet, 'yscan') then begin
@@ -322,7 +385,7 @@ function _das2_parsePackets, $
             if ptr_packet eq 2 and ptr_data eq 28 then stop
             
             z = _das2_decodeValues( $
-               pks[ptr_stream:ptr_stream+(yTypeSize*nitems)-1], yscan_struct._type, $
+               pks[iBuf:iBuf+(yTypeSize*nitems)-1], yscan_struct._type, $
                dim=nitems $
             )
             
@@ -336,7 +399,7 @@ function _das2_parsePackets, $
            endif else begin
               zdata[j].add, z
            endelse
-           ptr_stream += yTypeSize * nitems
+           iBuf += yTypeSize * nitems
            
            ;if j EQ 0 then tempz else list_tempz.add, tempz
            
@@ -387,10 +450,11 @@ function _das2_parsePackets, $
    return, d
 end
 
+
 ;+
 ; Parse the contents of a byte buffer into a list of das2 dataset (das2ds) 
 ; objects.  This is an all-at-once parser that can't handle datasets larger
-; than around 1/2 to 1/3 of the host machines ram. 
+; than around 1/2 to 1/3 of the host machine's ram. 
 ;
 ; :Returns:
 ;    list - a list of das2 dataset (das2ds) objects.
