@@ -27,11 +27,13 @@
 ;-
 
 
-pro das2var::getproperty, UNITS=units, VALUES=values, IDXMAP=idxmap
+pro das2var::getproperty, $
+	UNITS=units, VALUES=values, IDXMAP=idxmap, PARSER=parser
 	compile_opt idl2
 	if arg_present(units) then units = self.units
 	if arg_present(values) then values = self.values
 	if arg_present(idxmap) then values = self.idxmap
+	if arg_present(parser) then values = self.parser
 end
 
 function das2var::init, _extra=ex
@@ -40,15 +42,16 @@ function das2var::init, _extra=ex
 	
 	; default values
 	self.units = ''
-	self.values = !NULL
-	self.idxmap = intarr(8) 
+	self.values = !null
+	self.parser = !null
 	self.idxmap[*] = -1
 	
 	if(isa(ex)) then self.setproperty, _EXTRA=ex
 	return, !TRUE
 end
 
-pro das2var::setproperty, UNITS=units, VALUES=values, IDXMAP=idxmap
+pro das2var::setproperty, $
+	UNITS=units, VALUES=values, IDXMAP=idxmap, PARSER=parser
 	compile_opt idl2
 	
 	if isa(units) then self.units = units
@@ -58,7 +61,13 @@ pro das2var::setproperty, UNITS=units, VALUES=values, IDXMAP=idxmap
 	; has no more non-zero entries than the values array?  I don't
 	; want this function to be annoying to code that sets the index
 	; before the array is set, so let it go for now.
-	if isa(idxmap) then self.idxmap = idxmap
+	if isa(idxmap) then begin
+		iStop = n_elements(idxmap) - 1
+		if iStop gt 3 then iStop = 3
+		for i=0,iStop do self.idxmap[i] = idxmap[i]
+	endif
+	
+	if isa(parser) then self.parser = parser
 end
 
 pro das2dim::getproperty, PROPS=props, VARS=vars
@@ -94,7 +103,10 @@ end
 ;-
 pro das2var__define
 	compile_opt idl2
-	void = { das2var, inherits IDL_Object, units:'' , values:obj_new() }
+	void = { $
+		das2var, inherits IDL_Object, units:'', values:obj_new(), $
+		decoder:obj_new(), idxmap: intarr(4) $
+	}
 end
 
 ;+

@@ -64,7 +64,7 @@ end
 ;    Jul. 2018, D. Pisa : original
 ;    May  2019, C. Piker: refactored
 ;-
-function das2_readserver, sServer, sDataset, stime, ftime, $
+function das2_httpget, sServer, sDataset, stime, ftime, $
    interval=interval, resolution=resolution, params=params, ascii=ascii, $
    extras=extras, verbose=verbose, debug=debug, messages=messages
    

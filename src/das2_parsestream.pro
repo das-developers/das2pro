@@ -1,6 +1,7 @@
 ; The MIT License
 ;
 ; Copyright 2018-2019 David Pisa (IAP CAS Prague) dp@ufa.cas.cz
+;           2019      Chris Piker
 ;
 ; Permission is hereby granted, free of charge, to any person obtaining a copy
 ; of this software and associated documentation files (the "Software"), to deal
@@ -38,79 +39,260 @@ function _das2_tagExist, struct, tag
   if ind ne -1 then return, 1b else return, 0b
 end
 
-
 ;+
-; Turn strings such as 'little_endian_real4' into the number of bytes required
-; to store a single data value for a stream variable.
+; Convert a byte array to an array of given type
 ;
 ; :Private:
 ;
 ; :Params:
-;    encoding : in, required, type=string
+;    aPktData : in, required, type=byte array
+;       The binary data for an entire das2 packet
+; :Keywords:
+;    debug : in, optional, hidden, type=bool
+;       If !true print debugging info to standard error
 ;
 ; :Returns:
-;    unit : The number of bytes for a given type
-;
-; :Example:
-;    sz = _das2_typeSize('little_endian_real4')
-;
+;    an array of given type, time values are converted to TT2000
+; 
 ; :History:
-;    Jul. 2018 D. Pisa : original
+;    Jul. 2018, D. Pisa : original
+;    May  2019, C. Piker : updates to auto-convert times to TT2000
 ;-
-function _das2_typeSize, encoding
-  compile_opt idl2, hidden
+function das2decoder::decode, aPktData, debug=debug
+   compile_opt idl2, hidden
 
-  b = stregex(encoding, '[0-9]{1,2}$', /extract)
-  if strcmp(b, '') then return, 0u else return, uint(b)
+   if not keyword_set(dim) then dim = 1
+   nDataSz = n_elements(aPktData)
+	
+	if nDataSz < self.iOffset + self.nItems*self.nSize then
+		message, 'data bytes are not an integer number of ' + sType + ' item widths'
+	endif
+	
+	iEnd = self.iOffset + self.nItems*self.nSize - 1
+   aMine = aPktData[self.iOffset, iEnd]
+	   
+   ; Get array of properly sized byte strings
+   aVals = reform(aMine, self.nSize, self.nItems)
+
+   if stregex(self.sType, 'real4$', /boolean) then begin
+      if self.bBigE then return, swap_endian(reform(float(aVals, 0, 1, self.nItems))) $
+      else return, reform(float(aVals, 0, 1, dim))
+   endif
+
+   if stregex(self.sType, 'real8$', /boolean) then begin
+	
+      if self.bBigE then aTmp = swap_endian(reform(double(aVals, 0, 1, self.nItems))) $
+      else aTmp = reform(double(aVals, 0, 1, dim))
+		
+		; Convert to TT2000 if these are time values
+		if self.sEpoch ne '' then begin
+			aTmp2 = make_array(n_elements(aTmp), /L64)
+			for i=0, n_elements(aTmp)-1 do $
+				aTmp2[i] = das2_double_to_tt2000(self.sEpoch, aTmp[i])
+			
+			return, aTmp2
+		endif else begin
+			return, aTmp
+		endelse
+		
+   endif
+
+   if strcmp(sType, 'ascii', 5) then begin
+     aTmp = float(string(aVals))
+     if n_elements(aTmp) ne self.nItems then message, 'Item number mismatch in decoding'
+     return, aTmp
+   endif
+
+   if strcmp(sType, 'time', 4) then begin ; no case fold on purpose
+     aTmp = strtrim( string(aVals), 2)    ; remove spaces to clean times
+	  aTmp2 = make_array(n_elements(aTmp), /L64)
+	  
+	  ; need to vectorize this...
+	  for i=0,n_elements(aTmp)-1 do aTmp2[i] = das2_text_to_tt2000(aTmp[i])
+	  
+     return, aTmp2
+   endif
+   
+   ; never should reach this
+   message, 'can not decode values of type ' + sType
+   return, []
 end
 
 
 ;+
-; Create an approprate dataset object by inspecting stream and packet
-; headers structures
+; Initialize a das2 stream data value decoder.  Handles coversion of time values
+; to TT2000
+;
+; :Param:
+;    hPlane : in, required, type=hash
+;        A hash as return by xml_parse for the <x>, <y>, <z> or <yscan> plane
+;        of interest.
+;    
+;-
+function das2decoder::init, iOffset, hPlane
+	compile_opt idl2, hidden
+	
+	self.iOffset = iOffset
+	self.sType = hPlane['%type']
+	b = stregex(encoding, '[0-9]{1,2}$', /extract)
+	self.nSize = uint(b)
+	
+	self.nItems = 1
+	if hPlane.haskey('%nitems') then self.nItems = uint(hPlane['%nitems'])
+	
+	; big endian
+   if stregex(sType, '^big_', /boolean) or stregex(sType, '^sun_', /boolean) then $
+	   self.bBigE = !true
+		
+	; Get time base (if this is a time value)
+	if hPlane.haskey('%units') then begin
+	
+		sUnits = hPlane['%units']
+		if (sUnits eq 'us2000') or (sUnits eq 'mj1958') or (sUnits eq 't2000') $
+		   or (sUnits eq 't1970')then self.sEpoch = sUnits
+
+	endif
+	  	
+	return, !true
+end
+
+;+
+; Return the total number of bytes converted to data values in each
+; invocation of das2decoder::decode.
+;
+; :Private:
+;-
+pro das2decoder::chunkSize
+	compile_opt idl2, hidden
+	return, self.nItems * self.nSize
+end
+
+;+
+; Data plane decoder object
+;
+; :Private:
+;-
+pro das2decoder_define
+	compile_opt idl2
+	void = { $
+	   das2decoder, inherits IDL_Object, iOffset=0, nSize=0, nItems=0, $
+		sType='', bBigE=!false,  sEpoch='' $
+	}
+end
+
+;+
+; Make a new dimension given a plane header
+;  
+; :Private:
+;-
+function _das2_dimFromHdr, hStrmHdr, sAx, hPlane
+
+
+end
+
+
+;+
+; Make a new variable given a plane header
+;
+; :Private:
+;-
+function _das2_varFromHdr, hPlane, idxmap, decoder
+	sUnits = ''
+	if hPlane.haskey('%units') then begin
+		sUnits = hPlane['%units'] 
+	endif else begin
+		if hPlane.haskey('%zUnits') then sUnits = hPlane['%zUnits']
+	endelse
+	
+	var = das2var(units=sUnits)
+	return var
+end
+
+;+
+; Add dimenions and variables from a single type of plane to a dataset
+;
+; :Private:
+
+function _das2_addDimsFromHdr, $
+	hStrmHdr, hPktHdr, sPlaneType, idxmap, iOffset, dataset, FIRST=dimFirst
+	if sPlane eq 'yscan' then message, '_das2_addDimsFromHdr can''t handle yscans'
+	
+	if ~(hPktHdr.haskey(sPlaneType)) then return !null
+	
+	; make sure planes are always a list
+	lTmp = hPkt[sPlaneType]
+	if typename(lTmp) ne 'LIST' then lTmp = list( hPkt[sPlaneType] )
+				
+	; make decoders, variables and dimensions for each plane
+	for iPlane=0,n_elements(hPkt[sPlaneType]) do begin
+		
+		hPlane = (hPkt[sPlaneType])[iPlane]
+	
+		decoder = das2Decoder(iOffset, hPlane)
+		iOffset += decoder.chunkSize()
+		var = _das2_varFromHdr( hPlane)
+		var.idxmap = idxmap
+		var.parser = decoder
+			
+		; Add to an existing dimension (if min/max) or start a new one
+		; When we restructure das2 streams dimensions (or some other
+		; variable grouping mechanism) need to be added
+			
+		sSrc = _das2_getProp(hPlane, 'source')
+		sOp  = _das2_getProp(hPlane, 'operation')
+		if sSrc ne !null then begin
+			if dataset.dims.haskey(sSrc) then dim = dataset.dims[sSrc] else dim = !null
+		endif
+			
+		if dim eq !null then begin
+		
+			; names dim for source if present, add's it to the dataset
+			dim = _das2_dimFromHdr(hStrmHdr, sPlaneType, hPlane, dataset) 
+			dim.vars['center'] = var
+						
+		endif else begin
+			sRole = _das2_op2role(sOp)
+			dim.vars[sRole] = var
+		endif
+			
+		; Save off the first <y> dim in case we need to add an offset
+		; variable to it from the ytags
+		if dimFirst eq !null then dimFirst = dim
+		
+	endfor
+	
+	return iOffset
+end
+
+
+;+
+; Make a new dataset object given stream and packet headers. 
 ;
 ; :Private:
 ;
-; :Returns:
-;    A das2ds object
-;+
-function das2_ds_from_hdrs, dStreamHdr, dPktHdr
-	ds = das2ds()
+; :Params:
+;    hStrmHdr: in, required, type=hash
+;       The parsed stream XML header as returned from xml_parse
+;
+;    hPktHdr: in, required, type=hash
+;       The parsed packet XML header as returned from xml_parse
+;
+; :Keywords:
+;    DEBUG: in, optional, private, type=bool
+;       If true print debugging information
+;
+; :Author:
+;    Chris Piker (hence the snark)
+;-
+function _das2_datasetFromHdr, hStrmHdr, hPktHdr, /DEBUG=bDebug
 	
-	dPkt = pPktHdr['packet']  ; only element
+	dataset = das2ds()
 	
-	; Setting up dimensions
-	;
-	; <x>  -> X centers
-	;
-	; When: <stream><properties>renderer=waveform  (Just...wow)
-	; <yscan> yTags, yInterval, yMin -> X offsets
+	hStrm = hStrmHdr['stream'] ; only element that matters
 	
-	; Handling the Y axis...
-	; <y> -> Y center
-	; <yscan> yTags, yInterval, yMin -> Y offsets
-
-	; Handling the Z axis...
-	; <z> -> Z center
-	; <yscan> -> Z center
+	; Save properties that don't depend on the axis (i.e. the plane)
 	
-	
-	; X
-	bXOffset = !false
-	if dStreamHdr.haskey('properties') then begin
-		d = dStreamHdr['properties']
-		if d.haskey('renderer') then bXOffset = (d['renderer'] eq 'waveform')
-	endif
-	
-	; Watch out. If stream contains <x><x> then the 'x' body is a list not a hash
-	if dPkt.haskey('x'):
-		
-		
-		
-		
-	
-	
-	if dStreamHdr.haskey('properties') then begin
+	if hStrmHdr.haskey('properties') then begin
 	
 		; there's probably a better hash key iteration idiom than this in IDL
 		d = dStreamHdr['properties']
@@ -131,79 +313,166 @@ function das2_ds_from_hdrs, dStreamHdr, dPktHdr
 			; properties to the top level dataset
 			sAx = sKey.charat(0) 
 			if (sAx ne 'x') and (sAx ne 'y') and (sAx ne 'z') then &
-				ds.props[sKey] = das2_makeprop(sType,  sVal)
+				dataset.props[sKey] = das2_makeprop(sType,  sVal)
 		endfor
 	endif
+	
+	hPkt = hPktHdr['packet']   ; only element that matters
+	
+	; Legal packet types (as of das2.2):
+	;
+	; <x> <y><y><y>...
+	; <x> <y> <z><z><z>...
+	;
+	
+	; Setting up decoders, variables and dimensions
+	;
+	; <x>  -> X centers
+	; <y><properties operation="" > -> max or min
+	;
+	; When: <stream><properties>renderer=waveform  (Just...wow)
+	; <yscan> yTags, yInterval, yMin -> X offsets
+	
+	; Handling the Y axis...
+	; <y> -> Y center
+	; <y><properties operation="" > -> max or min
+	; <yscan> yTags, yInterval, yMin -> Y offsets
 
+	; Handling the Z axis...
+	; <z> -> Z center
+	; <yscan> -> Z center
+	; <yscan
+	
+	; Find out if this is a 1-index or 2-index dataset
+	nIndices = 1
+	if hPkt.haskey('yscan') then nIndices = 2
+	idxmap = make_array(nIndices, /integer)
+	
+	; X
+	bXOffset = !false
+	if hStrm.haskey('properties') then begin
+		h = hStrm['properties']
+		if h.haskey('%renderer') then bXOffset = (h['%renderer'] eq 'waveform')
+	endif
+	
+	; Go down through the planes defined in the header and create dimensions
+	; for each one.
+	iOffset = 0
+	xDimFirst = !null
+	
+	; The first overall dataset index is the only index that changes
+	; the values read for <x><y> and <z> planes
+	idxmap[0] = 0
+	if nIndices eq 2 then idxmap[1] = -1
+	
+	iOffset = _das2_addDimsFromHdr(hStrmHdr, hPkt, 'x', idxmap, iOffset, dataset, /FIRST=xDimFirst)	
+	iOffset = _das2_addDimsFromHdr(hStrmHdr, hPkt, 'y', idxmap, iOffset, dataset, /FIRST=yDimFirst)
+	iOffset = _das2_addDimsFromHdr(hStrmHdr, hPkt, 'z', idxmap, iOffset, dataset)
+	
+	; and now for the imfamous yscan, which should have been named <multi_y>
+	; or <multi_z> because that's the two types of record varying values it 
+	; provides. 
+	if hPkt.haskey('yscan') then begin
+	
+		idxmap[0] = 0
+		idxmap[1] = 1
+		
+		bYTagsSet = !false
+		
+		; make sure planes are always a list
+		lTmp = hPkt['yscan']
+		if typename(lTmp) ne 'LIST' then lTmp = list( hPkt['yscan'] )
+				
+		; make decoders, variables and dimensions for each plane
+		for iPlane=0,n_elements(hPkt[sPlaneType]) do begin
+		
+			hPlane = (hPkt[sPlaneType])[iPlane]
+	
+			decoder = das2Decoder(iOffset, hPlane)
+			iOffset += decoder.chunkSize()
+			var = _das2_varFromHdr( hPlane)
+			var.idxmap = idxmap
+			var.parser = decoder
+			
+			; Add to an existing dimension (if min/max) or start a new one
+			; When we restructure das2 streams dimensions (or some other
+			; variable grouping mechanism) need to be added
+			
+			sSrc = _das2_getProp(hPlane, 'source')
+			sOp  = _das2_getProp(hPlane, 'operation')
+			if sSrc ne !null then begin
+				if dataset.dims.haskey(sSrc) then dim = dataset.dims[sSrc] else dim = !null
+			endif
+			
+			if dim eq !null then begin
+				; names dim for source if present, add's it to the dataset
+				dim = _das2_dimFromHdr(hStrmHdr, 'z', hPlane, dataset) 
+				dim.vars['center'] = var
+						
+			endif else begin
+				sRole = _das2_op2role(sOp)
+				dim.vars[sRole] = var
+			endif
+			
+			; now to handle the yTags and yUnits...
+			if ~bYTagsSet then begin 
+				idxmap[0] = -1
+				idxmap[1] = 0
+			
+				; the actual data values can be enumerated or come form a generator
+				nItems = fix(hPlaen['%nitems'])
+			
+				if hPlane.haskey('%yTags') then begin
+					aVals = float(strtrim(strsplit(hPlane['%yTags'], ',', /extract)))
+				endif else if hPlane.haskey('%yTagInterval') then begin
+					rInt = double(hPlane['%yTagInterval'])
+					rMin = 0.0
+					if hPlane.haskey('%yTagMin') then rMin = double(hPlane['%yTagMin'])
+					aVals = dindgen(nItems, start=rMin, increment=rInt)
+				endif else begin 
+					aVals = dindgen(nItems, start=0.0, increment=1.0)
+				endelse
+			
+				var = das2var(values=values, idxmap=idxmap)
+				if hPlane.haskey('%yUnits') then var.units = hPlane['%yUnits']
+				
+				; Since yTags are not given as xOffset or yOffset in the over all
+				; packet, use a random property waaaaay up at the top of the stream 
+				; to decide (really?), oh and only set them once even though they
+				; repeat in the stream.
+				
+				if bXOffset then begin
+					; ytags offset or set x
+				
+					if xDimFirst ne !null then begin
+						xDimFirst.vars['offset'] = var
+					endif else begin
+						; there is no x dimension, going to have to make one
+						xDim = _das2_dimFromHdr(hStrmHdr, 'y', !null, dataset)
+						xDim.vars['center'] = var
+					endelse
+					
+				endif else begin
+					; ytags offset or set y
+				
+					if yDimFirst ne !null then begin
+						yDimFirst.vars['offset'] = var
+					endif else begin
+						; there is no y dimension, going to have to make one
+						yDim = _das2_dimFromHdr(hStrmHdr, 'y', !null, dataset)
+						yDim.vars['center'] = var
+					endelse
+				endelse
+					
+				bYTagsSet = !true
+				
+			endif  ; yTags
+		endfor    ; this yscan
+	endif        ; all yscans
+	
+	return, dataset
 end
 
-;+
-; Convert a byte array to an array of given type
-;
-; :Private:
-;
-; :Params:
-;    data : in, required, type=byte array
-;       The binary data to decode
-;    sType : in, required, type=string
-;       The encoding type for the data.  These are: sun_real4, sun_real8,
-;       little_endian4, little_endian8, timeN and asciiN, where N is the
-;       number of bytes in the value.
-;
-; :Keywords:
-;    dim : in, optional, type=uint
-;        Number if values to decode, defaults to 1 if not specified
-;
-;
-; :Returns:
-;    an array of given type
-; 
-; :History:
-;    Jul. 2018, D. Pisa : original
-;    May  2019, C. Piker : updates to handle multiple time values per row
-;-
-function _das2_decodeValues, data, sType, dim=dim, debug=debug
-   compile_opt idl2, hidden
-
-   if not keyword_set(dim) then dim = 1
-   data_size = n_elements(data)
-   type_size = _das2_typeSize(sType)
-   ;; !! big endian
-   if stregex(sType, '^big_', /boolean) or stregex(sType, '^sun_', /boolean) then bige = 1 else bige = 0
-   
-   ; if number of bytes do not match type and dimension then return []
-   if data_size / type_size NE dim then begin
-     message, 'data bytes are not an integer number of ' + sType + ' item widths'
-   endif
-   
-   ; Get array of properly sized byte strings
-   aVals = reform(data, type_size, dim)
-
-   if stregex(sType, 'real4$', /boolean) then begin
-      if bige then return, swap_endian(reform(float(aVals, 0, 1, dim))) $
-      else return, reform(float(aVals, 0, 1, dim))
-   endif
-
-   if stregex(sType, 'real8$', /boolean) then begin
-      if bige then return, swap_endian(reform(double(aVals, 0, 1, dim))) $
-      else return, reform(double(aVals, 0, 1, dim))
-   endif
-
-   if strcmp(sType, 'ascii', 5) then begin
-     temp = float(string(aVals))
-     if n_elements(temp) ne dim then stop
-     return, temp
-   endif
-
-   if strcmp(sType, 'time', 4) then begin ; no case fold on purpose
-     temp = strtrim( string(aVals), 2)    ; remove spaces to clean times
-     return, temp
-   endif
-   
-   ; never should reach this
-   message, 'can not decode values of type ' + sType
-   return, []
-end
 
 ;+
 ; Create a dataset structure from a list of packets.
@@ -223,7 +492,7 @@ end
 ;     Nov. 2018, D. Pisa : fixed object.struct conversion for ypackets
 ;-
 
-function _das2_parsePackets, hStreamHdr, buffer, debug=debug, messages=messages
+function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
                              
    compile_opt idl2, hidden
    
@@ -245,20 +514,23 @@ function _das2_parsePackets, hStreamHdr, buffer, debug=debug, messages=messages
 		sTag = string(buffer[iBuf:iBuf+3])
 		
 		if sTag.charat(0) eq '[' then begin
-			; New packet header, maybe dataset or comment
-			
+			; New packet header, maybe dataset or comment, get it's size
+			nPktHdrSz = long(string(buffer[iBuf+4:iBuf+9]))
+			hPktHdr = xml_parse(string(buffer[iBuf+10:iBuf+10+nPktHdrSz-1]))
 			
 			if (sTag.substring(1,2)).tolower() eq 'xx' then begin
 			
 				; it's a comment packet
-				if not _das2_handleComment(buffer, iBuf, messages) then return !null
+				if not _das2_readComment(buffer, iBuf, sMsg) then return !null
 				
 			endif else begin
 			
 				; it's a dataset
 				nPktId = fix(sTag.substring(1,2))
 				
-				if not _das2_handleDsDef(buffer, iBuf, messages, dataset) then return !null
+				
+				dataset = _das2_makeDataset(hStrmHdr, hPktHdr, sMsg, /DEBUG=bDebug)
+				if dataset eq !null then return !null
 				
 				; If they have re-defined a dataset that has already been defined
 				; which this ID then just skip it.
@@ -277,7 +549,7 @@ function _das2_parsePackets, hStreamHdr, buffer, debug=debug, messages=messages
 				nPktId = fix(sTag.substring(1,2))
 				dataset = dDatasets[nPktId]
 				
-				if not _das2_handleData(buffer, iBuf, messages, dataset) then return !null
+				if not _das2_readData(buffer, iBuf, messages, dataset) then return !null
 				
 			endif else begin
 				; Illegal packet start character
@@ -289,167 +561,6 @@ function _das2_parsePackets, hStreamHdr, buffer, debug=debug, messages=messages
 	
 	return lAllDs
 end
-
-	
-		
-      sPktId = string(pks[iBuf+1:iBuf+2])
-      
-      ; if packet does not start with [(0-9){2}] then stop
-      if strmatch(string(pks[iBuf:iBuf+3]), '\[??\]') then begin
-         iBuf += 4
-      endif else begin
-         printf, -2, 'ERROR: In packet stream. Expecting packet id '+ $
-                    '[01] - [99], or [XX]. Got: '+ string(pks[iBuf:iBuf+3])
-         stop
-         if keyword_set(debug) then begin
-            printf, -2, 'WARNING: Partial results returned'
-            return, debug
-         endif else return, !null
-      endelse
-      
-      ; number of bytes for a packet header
-      pktHdrSz = long(string(pks[iBuf:iBuf+5]))
-      iBuf += 6   ; shift a stream pointer
-
-      ; parse a packet header form xml to struct
-      hPktHdr = xml_parse(string(pks[iBuf:iBuf+pktHdrSz-1]))
-      hPktHdr = hPktHdr.ToStruct(/recursive)
-      
-      iBuf += pktHdrSz ; shift a stream pointer
-
-      ptr_data = 0L  ; reset data pointer
-      
-      ; A comment packet send to the message variable.  Need to implement
-		; throwing away progress messages so they don't obsure important error
-		; messages.
-      if strcmp('xx', sPktId, /fold_case) then begin
-			messages += string(tPktHdr)
-			continue
-		endif 
-      
-		; Looks like we have a data packet HDR, create a dateset object to store
-		; it's values, save off any needed header info
-		ds = das2_ds_from_hdrs(hStreamHdr, hPkthdr)
-		
-      ; loop across a stream
-      xdata = list()
-      ydata = list()
-      zdata = list()
-      
-      while iBuf lt stream_length do begin
-         ; expecting a binary data starting with a string :??:
-         ; if a semicolom is not found possibly a new packet header occurred
-         ; or en error in a stream parsing
-         if strcmp(string(pks[iBuf]), ':') NE 1 then break
-         
-         ; shift a stream pointer
-         iBuf += 4
-			
-			
-			
-			
-			; END of test ideas
-			
-         ; parse a type of x variable, typically time
-         xTypeSize = _das2_typeSize(pktHdr.packet.x._type)
-         if keyword_set(debug) then printf, -2, xTypeSize, format='DEBUG: xTypeSize = %s'
-         
-         ; !!! this is a tricky part, need to set variable type properly
-         xdata.add, _das2_decodeValues(pks[iBuf:iBuf+xTypeSize-1], pktHdr.packet.x._type)
- 
-         iBuf += xTypeSize ; shift a stream pointer
-         
-         ; set a number of items stored in a packet, yscan
-         if _das2_tagExist(pktHdr.packet, 'yscan') then begin
-            yscan = pktHdr.packet.yscan
-         endif else begin
-            yscan = pktHdr.packet.y
-         endelse
-         
-         ; set yscan to LIST, this is a hook because the packet scheme
-         if size(yscan, /type) ne 11 then yscan = LIST(yscan)
-         
-         for j=0, yscan.Count()-1 do begin
-            yscan_struct = yscan[j];.ToStruct()
-            
-            if SIZE(yscan_struct, /type) EQ 11 then yscan_struct = yscan_struct.ToStruct()
-            if _das2_tagExist(yscan_struct, '_nitems') then begin
-                nitems = yscan_struct._nitems
-            endif else begin
-                nitems = 1
-            endelse
-            yTypeSize = _das2_typeSize(yscan_struct._type)
-            
-            ; !! NEEDS to be updated
-            ; read a whole chunk of data as a byte vector
-            if ptr_packet eq 2 and ptr_data eq 28 then stop
-            
-            z = _das2_decodeValues( $
-               pks[iBuf:iBuf+(yTypeSize*nitems)-1], yscan_struct._type, $
-               dim=nitems $
-            )
-            
-            if not keyword_set(z) then begin
-               return, !NULL
-            endif
-            
-           ; shift a stream pointer
-           if ptr_data EQ 0 then begin
-              zdata.add, LIST(z)
-           endif else begin
-              zdata[j].add, z
-           endelse
-           iBuf += yTypeSize * nitems
-           
-           ;if j EQ 0 then tempz else list_tempz.add, tempz
-           
-         endfor
-         ptr_data += 1
-      
-      endwhile
-      
-      if n_elements(xdata) NE 0 then begin
-         if keyword_set(debug) then print, xdata
-         
-         x = reform(xdata.ToArray())
-         yscan = yscan[0]
-         
-         if renderer_waveform EQ 1 then begin
-            y = findgen(yscan._nitems) * yscan._YTAGINTERVAL
-         endif else begin
-            if  _das2_tagExist(pktHdr.packet, 'yscan') then begin
-               if _das2_tagExist(yscan, '_ytags') then begin
-                  y = float(strsplit(yscan[0]._ytags, ',', /extract))
-               endif else begin
-                  y = yscan._ytagmin + findgen(yscan._nitems) * yscan._YTAGINTERVAL
-               endelse
-            endif
-         endelse
-
-         ;if not keyword_set(x) then x = -1 ;else x = reform(xdata.ToArray())
-         if not keyword_set(y) then y = -1 ;else y = reform(ydata.ToArray())
-         if not keyword_set(z) then z = -1 else z = reform(zdata.ToArray())
-
-         if ptr_packet eq 0 then begin
-            d = list(create_struct('xdata', x, 'ydata', y, 'zdata', z, tPktHdr)) 
-         endif else begin
-            d.add, create_struct('xdata', x, 'ydata', y, 'zdata', z, tPktHdr)
-         endelse
-      
-      endif else begin
-         if ptr_packet eq 0 then begin
-            d = list(tPktHdr) 
-         endif else begin
-            d.add, tPktHdr
-         endelse
-         
-      endelse
-      
-      ptr_packet +=1
-   endwhile
-   return, d
-end
-
 
 ;+
 ; Parse the contents of a byte buffer into a list of das2 dataset (das2ds) 
