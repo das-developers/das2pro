@@ -21,24 +21,6 @@
 ; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ; SOFTWARE.
 
-
-; Check if a tag name exists in a stucture
-;
-; :Private:
-;
-; :Returns:
-;    byte 1 - true, 0 - false
-;
-; :History:
-;    Jul. 2018, D. Pisa : original
-;-
-function _das2_tagExist, struct, tag
-  compile_opt idl2, hidden
-
-  ind = where(strcmp(tag_names(struct),tag, /fold_case))
-  if ind ne -1 then return, 1b else return, 0b
-end
-
 ;+
 ; Convert a byte array to an array of given type
 ;
@@ -65,7 +47,7 @@ function das2decoder::decode, aPktData, debug=debug
    nDataSz = n_elements(aPktData)
 	
 	if nDataSz < self.iOffset + self.nItems*self.nSize then
-		message, 'data bytes are not an integer number of ' + sType + ' item widths'
+		message, 'Unexpected end of packet data'
 	endif
 	
 	iEnd = self.iOffset + self.nItems*self.nSize - 1
@@ -162,7 +144,7 @@ end
 ;
 ; :Private:
 ;-
-pro das2decoder::chunkSize
+function das2decoder::chunkSize
 	compile_opt idl2, hidden
 	return, self.nItems * self.nSize
 end
@@ -173,7 +155,7 @@ end
 ; :Private:
 ;-
 pro das2decoder_define
-	compile_opt idl2
+	compile_opt idl2, hidden
 	void = { $
 	   das2decoder, inherits IDL_Object, iOffset=0, nSize=0, nItems=0, $
 		sType='', bBigE=!false,  sEpoch='' $
@@ -181,13 +163,53 @@ pro das2decoder_define
 end
 
 ;+
-; Make a new dimension given a plane header
-;  
+; Inspect the properties sub item of a stream header object hash and
+; pull out the requested property value, if present.
+;
 ; :Private:
+;
+; :Params:
+;    hObj : in, required, type=hash
+;        A hash, as returned by xml_parse() of the <stream>, <x>, <y>, <z>,
+;        <yscan> element in question.
+;    sProp: in, required, type=string
+;        The property to find
+;
+; :Returns:
+;    !null if the property is not present or a type object
+;    (int, String, datum, datum range, etc.)
 ;-
-function _das2_dimFromHdr, hStrmHdr, sAx, hPlane
-
-
+function _das2_getProp, hObj, sProp
+	compile_opt idl2, hidden
+	
+	if ~ hObj.haskey('properties') then return !null
+	
+	hProp = hObj['properties']
+	
+	sType = !null
+	sVal = !null
+	
+	; Listed in order of likely occurence frequency
+	aTypes = [
+		'String','Datum','double','DatumRange','int','Time','boolean',
+		'Time', 'TimeRange'
+	]
+	
+	if hProp.haskey('%'+sProp) then begin 
+		sVal = hProp['%'+sProp]
+		sType = 'String'
+	endif else begin 
+		for i = 0, n_elements(aTypes) - 1 do begin
+			sKey = '%' + aTypes[i] + ':' + sProp
+			if hProp.haskey(sKey) then begin
+				sVal = hProp[sKey]
+				sType = aTypes[i]
+				break
+			endif
+		endfor
+	endelse
+	
+	return das2prop(/type=sType, /value=sVal)
 end
 
 
@@ -197,6 +219,8 @@ end
 ; :Private:
 ;-
 function _das2_varFromHdr, hPlane, idxmap, decoder
+	compile_opt idl2, hidden
+	
 	sUnits = ''
 	if hPlane.haskey('%units') then begin
 		sUnits = hPlane['%units'] 
@@ -209,12 +233,89 @@ function _das2_varFromHdr, hPlane, idxmap, decoder
 end
 
 ;+
+; Given a stream header, a plane header and a plane type, 
+; make a new physical dimension structure and add it to the dataset
+;
+; :Private:
+;
+; :Returns:
+;    The new dimension.  Also added to the dataset if not null
+;-
+function _das2_dimFromHdr, hStrmHdr, sPlaneType, hPlane, dataset
+	compile_opt idl2, hidden
+	
+	dim = das2dim()
+	
+	; First add all stream properites
+	if hStrmHdr.haskey('properties') then begin
+		; there's probably a better hash key iteration idiom than this in IDL
+		d = dStreamHdr['properties']
+		k = d.keys()
+		for i= 0,n_elements(k) - 1 do begin
+			sType = 'String'
+	   	sKey = k[i]
+			sVal = d[k[i]]
+			
+			; this is dumb, das2 streams need to follow proper XML rules -cwp
+			lTmp = strsplit(sKey, ':')
+			if n_elements(lTmp) > 1 then begin
+				sType = (lTmp[0]).substring(1,-1)
+				sKey = lTmp[1]
+			endif
+			
+			; For stuff that's not tagged as part of an axis, just add it's
+			; properties to the top level dataset
+			sAx = sKey.charat(0) 
+			if sAx = sPlaneType then begin
+				sKey = sKey.charat(1).tolower() + sKey.substring(2,-1)				
+				dim.props[sKey] = das2prop(/type=sType, /value=sVal)
+			endif
+		endfor
+	endif
+	
+	; now override with local properties
+	if hPlane.haskey('properties') then begin
+		; there's probably a better hash key iteration idiom than this in IDL
+		d = dStreamHdr['properties']
+		k = d.keys()
+		for i= 0,n_elements(k) - 1 do begin
+			sType = 'String'
+	   	sKey = k[i]
+			sVal = d[k[i]]
+			
+			; this is dumb, das2 streams need to follow proper XML rules -cwp
+			lTmp = strsplit(sKey, ':')
+			if n_elements(lTmp) > 1 then begin
+				sType = (lTmp[0]).substring(1,-1)
+				sKey = lTmp[1]
+			endif
+			
+			; For stuff that's not tagged as part of an axis, just add it's
+			; properties to the top level dataset
+			sAx = sKey.charat(0) 
+			if sAx = sPlaneType then begin
+				sKey = sKey.charat(1).tolower() + sKey.substring(2,-1)				
+				dim.props[sKey] = das2prop(/type=sType, /value=sVal)
+			endif
+			
+			; TODO: Should we keep local properties that don't start with
+			;       our axis tag?  
+		endfor
+	endif
+	
+	return dim
+end
+
+;+
 ; Add dimenions and variables from a single type of plane to a dataset
 ;
 ; :Private:
 
 function _das2_addDimsFromHdr, $
 	hStrmHdr, hPktHdr, sPlaneType, idxmap, iOffset, dataset, FIRST=dimFirst
+
+	compile_opt idl2, hidden
+	
 	if sPlane eq 'yscan' then message, '_das2_addDimsFromHdr can''t handle yscans'
 	
 	if ~(hPktHdr.haskey(sPlaneType)) then return !null
@@ -285,6 +386,7 @@ end
 ;    Chris Piker (hence the snark)
 ;-
 function _das2_datasetFromHdr, hStrmHdr, hPktHdr, /DEBUG=bDebug
+	compile_opt idl2, hidden
 	
 	dataset = das2ds()
 	
@@ -298,14 +400,14 @@ function _das2_datasetFromHdr, hStrmHdr, hPktHdr, /DEBUG=bDebug
 		d = dStreamHdr['properties']
 		k = d.keys()
 		for i= 0,n_elements(k) - 1 do begin
-			sType = 'string'
+			sType = 'String'
 	   	sKey = k[i]
 			sVal = d[k[i]]
 			
 			; this is dumb, das2 streams need to follow proper XML rules -cwp
 			lTmp = strsplit(sKey, ':')
 			if n_elements(lTmp) > 1 then begin
-				sType = lTmp[0]
+				sType = (lTmp[0]).substring(1,-1)
 				sKey = lTmp[1]
 			endif
 			
@@ -313,7 +415,7 @@ function _das2_datasetFromHdr, hStrmHdr, hPktHdr, /DEBUG=bDebug
 			; properties to the top level dataset
 			sAx = sKey.charat(0) 
 			if (sAx ne 'x') and (sAx ne 'y') and (sAx ne 'z') then &
-				dataset.props[sKey] = das2_makeprop(sType,  sVal)
+				dataset.props[sKey] = das2prop(/type=sType, /value=sVal)
 		endfor
 	endif
 	
@@ -475,6 +577,65 @@ end
 
 
 ;+
+; Parse data for a single packet using the given dataset structure and append
+; it to the variable arrays
+;
+; note: since das2 streams don't put a length on the data packets there's
+;       no way to cross check that the stream definition matches the length
+;       of the data.  All we can do is try to parse it without running of
+;       the end
+;
+; :Private:
+;-
+function _das2_readData, aBuffer, iBuf, messages, dataset
+	compile_opt idl2, hidden
+	
+	nRecSz = dataset.recsize()
+	aDims = dataset.dims.keys()
+	aRec = aBuffer[iBuf : iBuf + nRecSz - 1]
+	
+	for d = 0, n_elements(aDims) do begin
+		dim = dataset.dims[ aDims[d] ]
+		
+		aVar = dim.vars.keys()
+		for v = 0, n_elements(aVar) do begin
+			var = dim.vars[ aVar[v] ]
+			
+			if var.decoder ne !null then begin
+				aVals = var.decoder.decode(aRec)
+				
+				; if decode failure...
+				if aVals eq !null then return !false
+				
+				if var.values eq !null then $
+					var.values = aVals $
+				else $
+					var.values = temporary(var.values) + aVals
+			endif
+		endfor 
+	endfor
+	return !true
+end
+
+;+
+; Look to see if a message was an exception, if it was, format it as
+; a string and return it.
+;-
+function _das2_readExcept, hPktHdr
+	compile_opt idl2, hidden
+
+	if ~ hPktHdr.haskey('exception') return !null
+	
+	hExcept = hPktHdr['exception1']
+	sType = 'UnknownError'
+	if hExcept.haskey('%type') then sType = hExcept['%type']
+	sMsg = 'NoMessage'
+	if hExcept.haskey('%message') then sType = hExcept['%message']
+
+	return sType + ':  ' + sMsg
+end
+
+;+
 ; Create a dataset structure from a list of packets.
 ;
 ; :Private:
@@ -490,6 +651,7 @@ end
 ; :History:
 ;     Jul. 2018, D. Pisa : original 
 ;     Nov. 2018, D. Pisa : fixed object.struct conversion for ypackets
+;     May  2018, C. Piker : refactor
 ;-
 
 function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
@@ -503,7 +665,7 @@ function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
 	; All the datasets read from the stream, not just the curent definitions.
 	lAllDs = list()  
 	
-	messages = ''
+	sMsg = !null
 	
    iBuf = 0l       ; byte offset in the stream
    ptr_packet = 0l ; number of packets
@@ -520,14 +682,15 @@ function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
 			
 			if (sTag.substring(1,2)).tolower() eq 'xx' then begin
 			
-				; it's a comment packet
-				if not _das2_readComment(buffer, iBuf, sMsg) then return !null
+				; It's a comment packet, save the message if it's an exception
+				; ignore otherwise
+				sTmp = _das2_readExcept(hPktHdr)
+				if sTmp ne !null then sMsg = sTmp
 				
 			endif else begin
 			
 				; it's a dataset
 				nPktId = fix(sTag.substring(1,2))
-				
 				
 				dataset = _das2_makeDataset(hStrmHdr, hPktHdr, sMsg, /DEBUG=bDebug)
 				if dataset eq !null then return !null
@@ -571,7 +734,8 @@ end
 ;    list - a list of das2 dataset (das2ds) objects.
 ;-
 function das2_parsestream, buffer, MESSAGES=messages
-
+	compile_opt idl2
+	
 	messages = ""
 	
    nStreamSz = n_elements(buffer)
@@ -582,9 +746,8 @@ function das2_parsestream, buffer, MESSAGES=messages
    endif
    nStreamHdrSz = long(string(buffer[4:9])) ; fixed length for stream header size
 	hStreamHdr = xml_parse(string(buffer[10:10+nStreamHdrSz-1]))
-   tStreamHdr = hStreamHdr.ToStruct(/recursive)
    
-   if _das2_tagExist(tStreamHdr, 'stream') then begin
+   if hStreamHdr.haskey('stream') then begin
       ptrStream = 10 + nStreamHdrSz
       
       ; No packets in the stream, just a header.  This is format error
@@ -594,21 +757,14 @@ function das2_parsestream, buffer, MESSAGES=messages
 			messages="Stream contains no packets, not even an exception message"
 			return, !null
 		endif
-      
-      ; Bad hack for treating yOffset (yTags) as xOffset values.  Should be
-		; denoted with an explicit attribute name, should update this for das2.4
-      if _das2_tagExist(tStreamHdr.stream.properties, '_string_renderer') then begin
-         if strcmp(tStreamHdr.stream.properties._string_renderer, 'waveform') $
-			then waveform = !true else waveform = !false
-      endif else waveform = !false
-      
+            
       if keyword_set(debug) then begin
          lDataSet = _das2_parsePackets(
-				hStreamHdr, buffer[ptrStream:*], waveform, debug=debug, messages=messages
+				hStreamHdr, buffer[ptrStream:*], debug=debug, messages=messages
 			)
       endif else begin
          lDataSet = _das2_parsePackets(
-				hStreamHdr, buffer[ptrStream:*], waveform, messages=messages
+				hStreamHdr, buffer[ptrStream:*], messages=messages
 			)
       endelse
       

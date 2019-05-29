@@ -26,15 +26,63 @@
 ;
 ;-
 
-
-pro das2var::getproperty, $
-	UNITS=units, VALUES=values, IDXMAP=idxmap, PARSER=parser
+function das2prop::init, _extra=ex
 	compile_opt idl2
-	if arg_present(units) then units = self.units
-	if arg_present(values) then values = self.values
-	if arg_present(idxmap) then values = self.idxmap
-	if arg_present(parser) then values = self.parser
+	void = self.IDL_Object::init()
+		
+	if(isa(ex)) then self.setproperty, _EXTRA=ex
+	return, !TRUE
 end
+
+pro das2prop::getproperty, TYPE=type, VALUE=value
+	compile_opt idl2
+	if arg_present(type) then type = self.type
+	
+	if arg_present(value) then begin 
+		; return an appropriate IDL type for the value even though it's stored
+		; as a string
+		case self.type of
+			'int': value = fix(self.value)
+			'double': value = double(self.value)
+			'Datum':  begin
+				l = self.value.split()
+				sUnits = !null
+				if n_elements(l) gt 1 then sUnits = l[1:*]
+				sVal = l[0]
+				value = create_struct('value', double(sVal), 'units', sUnits)
+				end
+			'DatumRange': begin
+				l = self.value.split()
+				sUnits = !null
+				sMin = l[0]
+				if n_elements(l) lt 3 then sMax = sMin else sMax = l[2]
+				if n_elements(l) gt 3 then sUnits = l[3:*]
+				value = create_struct('min', double(sMin), 'max', double(sMax), units, sUnits)
+				end
+			'boolean': self.value ? value = !true : value = !false
+			'String':  value = self.value
+			'Time':  value = das2_text_to_tt2000(self.value)
+			'TimeRange': begin
+				l = self.value.split()
+				sBeg = l[0]
+				if n_elements(l) lt 3 then sEnd = sBeg else sEnd = l[2]
+				nBeg = das2_text_to_tt2000(sBeg)
+				nEnd = das2_text_to_tt2000(sEnd)
+				value = create_struct('min', nBeg, 'max', nEnd, units, 'UTC')
+				end
+			else: value = self.value
+		endcase
+		
+	endif
+end
+
+pro das2prop::setproperty, TYPE=type, VALUE=value
+	compile_opt idl2
+	
+	if isa(type) then self.type = type
+	if isa(value) then self.value = value	
+end
+
 
 function das2var::init, _extra=ex
 	compile_opt idl2
@@ -48,6 +96,15 @@ function das2var::init, _extra=ex
 	
 	if(isa(ex)) then self.setproperty, _EXTRA=ex
 	return, !TRUE
+end
+
+pro das2var::getproperty, $
+	UNITS=units, VALUES=values, IDXMAP=idxmap, PARSER=parser
+	compile_opt idl2
+	if arg_present(units) then units = self.units
+	if arg_present(values) then values = self.values
+	if arg_present(idxmap) then values = self.idxmap
+	if arg_present(parser) then values = self.parser
 end
 
 pro das2var::setproperty, $
@@ -65,7 +122,7 @@ pro das2var::setproperty, $
 		iStop = n_elements(idxmap) - 1
 		if iStop gt 3 then iStop = 3
 		for i=0,iStop do self.idxmap[i] = idxmap[i]
-	endif
+	endifall
 	
 	if isa(parser) then self.parser = parser
 end
@@ -94,9 +151,18 @@ function das2ds::init, _extra=ex
 	void = self.IDL_Object::init()
 	self.props = hash()
 	self.dims = hash()
-	return, !TRUE
+	return, !true
 end
 
+;+
+; Das2 property has a type and value
+;-
+pro das2prop__define
+	compile_opt idl2
+	void = { $
+		das2prop, inherits IDL_Object, type=!null, value=!null
+	}
+end
 
 ;+
 ; Das2 Variable, an array, it's units and it's index map.
