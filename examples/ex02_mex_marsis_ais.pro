@@ -10,14 +10,20 @@ pro ex02_mex_marsis_ais
 	sMin = '2005-08-06T00:47:40'
 	sMax = '2005-08-06T01:32:40'
 	sFmt = "%s?server=dataset&dataset=%s&start_time=%s&end_time=%s"
-	sQuery = string(sServer, sDataset, sMin, sMax, format=sFmt)
+	sUrl = string(sServer, sDataset, sMin, sMax, format=sFmt)
 	
 	; Get datasets from a web server.  The sMsg varible will hold any
 	; error or message data returned from the server.  Typically this
 	; is empty unless an error occurs.
-	lDs = das2_readhttp(sQuery, /messages=sMsg)
+	sMsg = !null
+	lDs = das2_readhttp(sUrl, messages=sMsg)
+	
+	if lDs eq !null then begin
+		printf, -2, sMsg
+		stop
+	endif
 
-	print, n_elements(l), /format="%d datesets read"
+	print, n_elements(lDs), format="%d datesets read"
 
 	; There is typically only one dataset for homogeneous streams
 	ds = lDs[0]

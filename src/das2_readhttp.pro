@@ -41,10 +41,9 @@ end
 ; Request data from a specific das2 server using native HTTP GET parameters
 ; 
 ; :Params:
-;    sServer:  in, required, type=string
-;    sDataset: in, required, type=string
-;    stime: in, required, type=string
-;    ftime: in, required, type=string
+;    sUrl:  in, required, type=string
+;       The full HTTP GET url to retrieve, it doesn't need to be URL encoded
+;       this function will handle that step
 ;
 ; :Keywords:
 ;    params: in, optional, type=list
@@ -60,13 +59,31 @@ end
 ;    xml_parse: IDL 8.6.1
 ;    IDLnetURL: IDL 6.4
 ;
+; :Example:
+;    sServer = 'http://planet.physics.uiowa.edu/das/das2Server'
+;    sDataset = 'Cassini/RPWS/HiRes_MidFreq_Waveform'
+;    sBeg = '2008-08-10T09:06'
+;    sEnd = '2008-08-10T09:13'
+;    sParams = '10khz'
+;    sFmt = '%s?server=dataset&dataset=%s&start_time=%s&end_time=%s&params=%s'
+;    sUrl = string(sServer, sDataset, sMin, sMax, sParams, format=sFmt)
+;   
+;    lDs = das2_readhttp(sUrl, /messages=sMsg)
+;
+;    if lDs eq !null then begin
+;       print, sMsg
+;       stop
+;    endif
+;
+;    print, n_elements(lDs), /format="%d datesets read"
+;
+;    print, lDs[0]
+;
 ; :History:
 ;    Jul. 2018, D. Pisa : original
 ;    May  2019, C. Piker: refactored
 ;-
-function das2_httpget, sServer, sDataset, stime, ftime, $
-   interval=interval, resolution=resolution, params=params, ascii=ascii, $
-   extras=extras, verbose=verbose, debug=debug, messages=messages
+function das2_readhttp, sUrl, extras=extras, verbose=verbose, debug=debug, messages=messages
    
    compile_opt idl2
 
@@ -79,34 +96,16 @@ function das2_httpget, sServer, sDataset, stime, ftime, $
 ;     return, !null
 ;  endif
 
-   ; Test a number of input parameters, if < 3 printout help
-   if n_params() lt 3 then begin
-      printf, -2, 'ASSERT: No parameters'
-      return, !NULL
-   endif
-
-   if keyword_set(VERBOSE) then VERBOSE = 1 else VERBOSE = 0
-
-   url_host = sServer
-   url_path = '?server=dataset&'
-   url_path += 'dataset='+sDataset
-   if keyword_set(interval) then url_path += '&interval='+string(interval)
-   if keyword_set(resolution) then begin 
-      if (resolution > 0.0) then url_path += '&resolution='+strtrim(string(resolution), 2)
-   endif
-        
-   if keyword_set(params) then url_path += '&params=' + IDLnetURL.URLEncode(STRJOIN('--'+params+' ', /SINGLE))
-   if keyword_set(ascii) then url_path += '&ascii=1'
-   url_path += '&start_time=' + stime
-   url_path += '&end_time=' + ftime
-
-   ; url_path = 'http://planet.physics.uiowa.edu/das/das2Server?server=dataset&params=10khz&dataset=Cassini/RPWS/HiRes_MidFreq_Waveform&start_time=2008-08-10T09:06:00.000Z&end_time=2008-08-10T09:13:00.000Z'
-   ; url_path = 'http://planet.physics.uiowa.edu/das/das2Server?server=dataset&dataset=Cassini/RPWS/HiRes_HiFreq_Spectra&start_time=2008-08-10T09:00:00.000Z&end_time=2008-08-10T10:00:00.000Z'
+   if keyword_set(VERBOSE) then VERBOSE = !true else VERBOSE = !false
+	
+	;if keyword_set(params) then url_path += '&params=' + IDLnetURL.URLEncode(STRJOIN('--'+params+' ', /SINGLE))
+   
    if (errorStatus NE 0) then begin
       CATCH, /CANCEL
       ; Display the error msg in a dialog and in the IDL output log
       r = DIALOG_MESSAGE(!ERROR_STATE.msg, TITLE='URL Error', /ERROR)
       if VERBOSE then print, !ERROR_STATE.msg
+		
       ; Get the properties that will tell us more about the error.
       oUrl.GetProperty, RESPONSE_CODE=rspCode, $
       RESPONSE_HEADER=rspHdr, RESPONSE_FILENAME=rspFn
@@ -134,7 +133,6 @@ function das2_httpget, sServer, sDataset, stime, ftime, $
        oUrl.SetProperty, URL_PORT=extras.port
    endif
 
-   sUrl = url_host + url_path
    printf, -2, "INFO: Requesting "+sUrl
    
    ; Should maybe change this so to callback processing so the whole stream is
@@ -145,6 +143,6 @@ function das2_httpget, sServer, sDataset, stime, ftime, $
    ;restore, 'buffer_wbr.sav', /v
    obj_destroy, oUrl
 	
-   return das2_parsestream(buffer, /messages=messages)
+   return, das2_parsestream(buffer, messages=messages)
 	
 end
