@@ -29,9 +29,11 @@ function das2prop::init, _extra=ex
 	return, !TRUE
 end
 
-pro das2prop::getproperty, TYPE=type, VALUE=value
+pro das2prop::getproperty, TYPE=type, VALUE=value, STRVAL=strval
 	compile_opt idl2
 	if arg_present(type) then type = self.type
+	
+	if arg_present(strval) then strval = self.value
 	
 	if arg_present(value) then begin 
 		; return an appropriate IDL type for the value even though it's stored
@@ -40,25 +42,25 @@ pro das2prop::getproperty, TYPE=type, VALUE=value
 			'int': value = fix(self.value)
 			'double': value = double(self.value)
 			'Datum':  begin
-				l = self.value.split()
+				l = self.value.split(' ')
 				sUnits = !null
 				if n_elements(l) gt 1 then sUnits = l[1:*]
 				sVal = l[0]
 				value = create_struct('value', double(sVal), 'units', sUnits)
 				end
 			'DatumRange': begin
-				l = self.value.split()
+				l = self.value.split(' ')
 				sUnits = !null
 				sMin = l[0]
 				if n_elements(l) lt 3 then sMax = sMin else sMax = l[2]
 				if n_elements(l) gt 3 then sUnits = l[3:*]
-				value = create_struct('min', double(sMin), 'max', double(sMax), units, sUnits)
+				value = create_struct('min', double(sMin), 'max', double(sMax), 'units', sUnits)
 				end
 			'boolean': value = self.value ? !true : !false
 			'String':  value = self.value
 			'Time':  value = das2_text_to_tt2000(self.value)
 			'TimeRange': begin
-				l = self.value.split()
+				l = self.value.split(' ')
 				sBeg = l[0]
 				if n_elements(l) lt 3 then sEnd = sBeg else sEnd = l[2]
 				nBeg = das2_text_to_tt2000(sBeg)
@@ -75,7 +77,17 @@ pro das2prop::setproperty, TYPE=type, VALUE=value
 	compile_opt idl2, hidden
 	
 	if isa(type) then self.type = type
-	if isa(value) then self.value = value	
+	if isa(value) then self.value = value
+end
+
+function das2prop::_overloadPrint
+	compile_opt idl2, hidden
+	return, self.tostr()
+end
+
+function das2prop::tostr
+	compile_opt idl2, hidden
+	return, string(self.type, self.value, format= '%s | %s')
 end
 
 ;+

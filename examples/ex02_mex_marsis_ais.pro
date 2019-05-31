@@ -7,8 +7,8 @@ pro ex02_mex_marsis_ais
 	; Generate the URL for the desired subset
 	sServer = 'http://planet.physics.uiowa.edu/das/das2Server'
 	sDataset = 'Mars_Express/MARSIS/Spectrogram'
-	sMin = '2005-08-06T00:47:40'
-	sMax = '2005-08-06T01:32:40'
+	sMin = '2005-08-06T00:52:09'
+	sMax = '2005-08-06T00:52:17'
 	sFmt = "%s?server=dataset&dataset=%s&start_time=%s&end_time=%s"
 	sUrl = string(sServer, sDataset, sMin, sMax, format=sFmt)
 	

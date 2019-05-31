@@ -112,8 +112,11 @@ function _das2_varFromHdr, hPlane, idxmap, decoder
 		if hPlane.haskey('%zUnits') then sUnits = hPlane['%zUnits']
 	endelse
 	
-	var = das2var(units=sUnits)
-	;var = obj_new('das2var', units=sUnits)
+	;var = das2var(units=sUnits, idxmap=idxmap, parser=decoder)
+	;printf, -2, 'Making var with units='+sUnits+', idxmap=', idxmap, $
+	;            ' and parser=', decoder
+
+	var = obj_new('das2var', UNITS=sUnits, IDXMAP=idxmap, PARSER=decoder)
 	return, var
 end
 
@@ -126,15 +129,16 @@ end
 ; :Returns:
 ;    The new dimension
 ;-
-function _das2_dimFromHdr, hStrmHdr, sPlaneType, hPlane
+function _das2_dimFromHdr, hStream, sPlaneType, hPlane, sKind
 	compile_opt idl2, hidden
 	
 	dim = obj_new('das2dim')
+	dim.kind = sKind
 	
 	; First add all stream properites
-	if hStrmHdr.haskey('properties') then begin
+	if hStream.haskey('properties') then begin
 		; there's probably a better hash key iteration idiom than this in IDL
-		d = dStreamHdr['properties']
+		d = hStream['properties']
 		k = d.keys()
 		for i= 0,n_elements(k) - 1 do begin
 			sType = 'String'
@@ -142,8 +146,8 @@ function _das2_dimFromHdr, hStrmHdr, sPlaneType, hPlane
 			sVal = d[k[i]]
 			
 			; this is dumb, das2 streams need to follow proper XML rules -cwp
-			lTmp = strsplit(sKey, ':')
-			if n_elements(lTmp) > 1 then begin
+			lTmp = sKey.split(':')
+			if n_elements(lTmp) gt 1 then begin
 				sType = (lTmp[0]).substring(1,-1)
 				sKey = lTmp[1]
 			endif
@@ -162,7 +166,7 @@ function _das2_dimFromHdr, hStrmHdr, sPlaneType, hPlane
 	; now override with local properties
 	if hPlane.haskey('properties') then begin
 		; there's probably a better hash key iteration idiom than this in IDL
-		d = dStreamHdr['properties']
+		d = hPlane['properties']
 		k = d.keys()
 		for i= 0,n_elements(k) - 1 do begin
 			sType = 'String'
@@ -170,8 +174,8 @@ function _das2_dimFromHdr, hStrmHdr, sPlaneType, hPlane
 			sVal = d[k[i]]
 			
 			; this is dumb, das2 streams need to follow proper XML rules -cwp
-			lTmp = strsplit(sKey, ':')
-			if n_elements(lTmp) > 1 then begin
+			lTmp = sKey.split(':')
+			if n_elements(lTmp) gt 1 then begin
 				sType = (lTmp[0]).substring(1,-1)
 				sKey = lTmp[1]
 			endif
@@ -196,9 +200,9 @@ end
 ; :Private:
 ;
 ; :Params:
-;    hStrmHdr : in, required, type=hash
+;    hStream : in, required, type=hash
 ;
-;    hPktHdr  : in, required, type=hash
+;    hPkt  : in, required, type=hash
 ;
 ;    sPlaneType : in, required, type=string
 ;       The plane tag, one of x,y,z,yscan depending on which type of
@@ -235,7 +239,8 @@ end
 ;    dimension sets.
 
 function _das2_addDimsFromHdr, $
-	hStrmHdr, hPktHdr, sPlaneType, sDatAxis, idxmap, iOffset, dataset, FIRST=dimFirst
+	hStream, hPkt, sPlaneType, sDatAxis, idxmap, iOffset, sKind, $
+	dataset, FIRST=dimFirst
 
 	compile_opt idl2, hidden
 		
@@ -244,11 +249,11 @@ function _das2_addDimsFromHdr, $
 		sUnitAttr = '%zUnits'
 	endif
 	
-	if ~(hPktHdr.haskey(sPlaneType)) then return, iOffset
+	if ~(hPkt.haskey(sPlaneType)) then return, iOffset
 	
 	; make sure planes are always a list
-	lPlanes = hPktHdr[sPlaneType]
-	if typename(lPlanes) ne 'LIST' then lPlanes = list( hPktHdr[sPlaneType] )
+	lPlanes = hPkt[sPlaneType]
+	if typename(lPlanes) ne 'LIST' then lPlanes = list( hPkt[sPlaneType] )
 				
 	; make decoders, variables and dimensions for each plane
 	for iPlane=0, n_elements(lPlanes) - 1 do begin
@@ -257,9 +262,7 @@ function _das2_addDimsFromHdr, $
 	
 		decoder = obj_new('das2decoder', iOffset, hPlane)
 		iOffset += decoder.chunkSize()
-		var = _das2_varFromHdr( hPlane)
-		var.idxmap = idxmap
-		var.parser = decoder
+		var = _das2_varFromHdr( hPlane, idxmap, decoder)
 			
 		; Add to an existing dimension (if min/max) or start a new one
 		; When we restructure das2 streams dimensions (or some other
@@ -268,15 +271,16 @@ function _das2_addDimsFromHdr, $
 		sSrc = _das2_getProp(hPlane, 'source')
 		sOp  = _das2_getProp(hPlane, 'operation')
 		
-		; git an existing dim...
+		; get an existing dim...
 		if sSrc ne !null then begin
-			if dataset.dims.haskey(sSrc) then dim = dataset.dims[sSrc] else dim = !null
+			if dataset.dims.haskey(sSrc) then dim = dataset.dims[sSrc] $
+				else dim = !null
 		endif
 		
 		; ...or create a new one
 		if dim eq !null then begin
 			
-			dim = _das2_dimFromHdr(hStrmHdr, sDatAxis, hPlane)
+			dim = _das2_dimFromHdr(hStream, sDatAxis, hPlane, sKind)
 			dim.vars['center'] = var
 			
 			; determining good names for dimensions is not easy...
@@ -293,7 +297,10 @@ function _das2_addDimsFromHdr, $
 			
 			if dataset.dims.haskey(sName) then $
 				message, 'Error in das2 stream, name '+sName+' repeats in the same packet"
+			
 			dataset.dims[sName] = dim
+			
+			;printf, -2, dataset
 									
 		endif else begin
 			sRole = _das2_op2role(sOp)
@@ -308,7 +315,6 @@ function _das2_addDimsFromHdr, $
 	
 	return, iOffset
 end
-
 
 ;+
 ; Make a new dataset object given stream and packet headers. 
@@ -336,26 +342,27 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 	; dimension or a variable or else das2ds__define.pro will not be compiled
 	dataset = das2ds()
 	
-	hStrm = hStrmHdr['stream'] ; only element that matters
+	hStream = hStrmHdr['stream'] ; only element that matters
 	
-	; Save properties that don't depend on the axis (i.e. the plane)
-	
-	if hStrmHdr.haskey('properties') then begin
+	; Save properties that don't depend on the axis (i.e. the plane)	
+	if hStream.haskey('properties') then begin
 	
 		; there's probably a better hash key iteration idiom than this in IDL
-		d = dStreamHdr['properties']
-		k = d.keys()
+		h = hStream['properties']
+		k = h.keys()
 		for i= 0,n_elements(k) - 1 do begin
 			sType = 'String'
 	   	sKey = k[i]
-			sVal = d[k[i]]
+			sVal = h[k[i]]
 			
 			; this is dumb, das2 streams need to follow proper XML rules -cwp
-			lTmp = strsplit(sKey, ':')
-			if n_elements(lTmp) > 1 then begin
+			lTmp = sKey.split(':')			
+			if n_elements(lTmp) gt 1 then begin
 				sType = (lTmp[0]).substring(1,-1)
 				sKey = lTmp[1]
-			endif
+			endif else begin
+				sKey = (lTmp[0]).substring(1,-1)
+			endelse
 			
 			; For stuff that's not tagged as part of an axis, just add it's
 			; properties to the top level dataset
@@ -398,8 +405,8 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 	
 	; X
 	bXOffset = !false
-	if hStrm.haskey('properties') then begin
-		h = hStrm['properties']
+	if hStream.haskey('properties') then begin
+		h = hStream['properties']
 		if h.haskey('%renderer') then bXOffset = (h['%renderer'] eq 'waveform')
 	endif
 	
@@ -413,22 +420,27 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 	idxmap[0] = 0
 	if nIndices eq 2 then idxmap[1] = -1
 	
+	sKind = 'Coordinate'
 	iOffset = _das2_addDimsFromHdr( $
-		hStrmHdr, hPkt, 'x', 'x', idxmap, iOffset, dataset, FIRST=xDimFirst $
+		hStream, hPkt, 'x', 'x', idxmap, iOffset, sKind, dataset, FIRST=xDimFirst $
 	)
+	
+	if hPkt.haskey('z') || hPkt.haskey('yscan') then sKind = 'Data'
+		
 	iOffset = _das2_addDimsFromHdr( $
-		hStrmHdr, hPkt, 'y', 'y', idxmap, iOffset, dataset, FIRST=yDimFirst $
+		hStream, hPkt, 'y', 'y', idxmap, iOffset, sKind, dataset, FIRST=yDimFirst $
 	)
+	
 	iOffset = _das2_addDimsFromHdr( $
-		hStrmHdr, hPkt, 'z', 'z', idxmap, iOffset, dataset $
+		hStream, hPkt, 'z', 'z', idxmap, iOffset, 'Data', dataset $
 	)
-
+	
 	if nIndices eq 2 then begin
 		idxmap[0] = 0
 		idxmap[1] = 1
 		
 		iOffset = _das2_addDimsFromHdr( $
-			hStrmHdr, hPkt, 'yscan', 'z', idxmap, iOffset, dataset $
+			hStream, hPkt, 'yscan', 'z', idxmap, iOffset, 'Data', dataset $
 		)
 		
 		; Get the first yscan object
@@ -451,8 +463,12 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 		endif else begin 
 			aVals = dindgen(nItems, start=0.0, increment=1.0)
 		endelse
-			
-		var = das2var(values=values, idxmap=idxmap)
+		
+		; Set the values directly, this one has no decoder
+		;printf, -2, 'DEBUG: Making var with values=', aVals, ', idxmap=', idxmap
+		var = obj_new('das2var', VALUES=aVals, IDXMAP=idxmap)
+		;printf, -2, 'DEBUG: After var, obj_new'
+		
 		if hPlane.haskey('%yUnits') then var.units = hPlane['%yUnits']
 		sName = _das2_nameFromUnits(var.units)
 				
@@ -468,7 +484,7 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 			endif else begin
 				; there is no x dimension, going to have to make one, and yes
 				; we use the y values to define the x dimension properties
-				xDim = _das2_dimFromHdr(hStrmHdr, 'y', !null, dataset)
+				xDim = _das2_dimFromHdr(hStream, 'y', !null, 'Coordinate')
 				xDim.vars['center'] = var
 				if sName eq !null then sName = 'X'
 				dataset.dims[sName] = xDim
@@ -481,7 +497,7 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 				yDimFirst.vars['offset'] = var
 			endif else begin
 				; there is no y dimension, going to have to make one
-				yDim = _das2_dimFromHdr(hStrmHdr, 'y', !null, dataset)
+				yDim = _das2_dimFromHdr(hStream, 'y', !null, 'Coordinate')
 				yDim.vars['center'] = var
 				if sName eq !null then sName = 'Y'
 				dataset.dims[sName] = yDim
@@ -510,25 +526,32 @@ function _das2_onData, aBuffer, iBuf, messages, dataset
 	
 	nRecSz = dataset.recsize()
 	aDims = dataset.dims.keys()
-	aRec = aBuffer[iBuf : iBuf + nRecSz - 1]
+	aRec = aBuffer[iBuf + 4 : (iBuf + 4 + nRecSz) - 1]
 	
-	for d = 0, n_elements(aDims) do begin
+	for d = 0, n_elements(aDims) - 1 do begin
 		dim = dataset.dims[ aDims[d] ]
 		
 		aVar = dim.vars.keys()
-		for v = 0, n_elements(aVar) do begin
+		for v = 0, n_elements(aVar) - 1 do begin
 			var = dim.vars[ aVar[v] ]
 			
-			if var.decoder ne !null then begin
-				aVals = var.decoder.decode(aRec)
+			if var.parser ne !null then begin
+				aVals = var.parser.decode(aRec)
 				
 				; if decode failure...
 				if aVals eq !null then return, !false
 				
-				if var.values eq !null then $
-					var.values = aVals $
-				else $
-					var.values = temporary(var.values) + aVals
+				if var.values eq ptr_new() then begin
+					;printf, -2, 'DEBUG: _das2_onData, first call'
+					var.values = aVals ;ptr_new(aVals, /NO_COPY) 
+				endif else begin
+					;printf, -2, 'DEBUG: _das2_onData, subsequent call'
+					ary = *(var.values)
+					
+					; Does this redefine the array and thus break the pointer???
+					ary = [ary, aVals]
+					;var.values = [var.values, aVals]
+				endelse
 			endif
 		endfor 
 	endfor
@@ -591,8 +614,9 @@ function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
       
 		sTag = string(buffer[iBuf:iBuf+3])
 		
+		; Handle packet headers...
 		if sTag.charat(0) eq '[' then begin
-			; New packet header, maybe dataset or comment, get it's size
+		
 			nPktHdrSz = long(string(buffer[iBuf+4:iBuf+9]))
 			hPktHdr = xml_parse(string(buffer[iBuf+10:iBuf+10+nPktHdrSz-1]))
 			
@@ -610,10 +634,7 @@ function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
 				
 				dataset = _das2_onNewPktId(hStrmHdr, hPktHdr, DEBUG=bDebug)
 				if dataset eq !null then return, !null
-				
-				printf, -2, "DEBUG: pkt id=", nPktId, "  dataset=", dataset, "  dims=", n_elements(dataset.dims)
-
-				
+								
 				; Set this as the dataset object for this packet ID, and add it to
 				; the list of all datasets incase this packet ID is redefined
 				hDatasets[nPktId] = dataset
@@ -623,19 +644,20 @@ function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
 			
 			iBuf += nPktHdrSz + 10
 			
-			
+		; ...or handle packet data
 		endif else begin
 		
 			if sTag.charat(0) eq ':' then begin
 				
 				; A data packet	
 				nPktId = fix(sTag.substring(1,2))
+				
 				dataset = hDatasets[nPktId]
-				printf, -2, "DEBUG: pkt id=", nPktId, "  dataset=", dataset, "  dims=", n_elements(dataset.dims)
+				;printf, -2, dataset
 				
 				if not _das2_onData(buffer, iBuf, messages, dataset) then return, !null
 				
-				iBuf += dataset.recsize()
+				iBuf += dataset.recsize() + 4
 				
 			endif else begin
 				; Illegal packet start character
@@ -644,6 +666,8 @@ function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
 			endelse
 		endelse
 	endwhile
+	
+	printf, -2, lAllDs[0]
 	
 	return, lAllDs
 end

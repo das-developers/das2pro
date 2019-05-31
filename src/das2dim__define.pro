@@ -20,16 +20,23 @@
 ; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ; SOFTWARE.
 
-pro das2dim::getproperty, PROPS=props, VARS=vars
+pro das2dim::getproperty, PROPS=props, VARS=vars, KIND=kind
 	compile_opt idl2
+	if arg_present(kind) then kind = self.kind
 	if arg_present(props) then props = self.props
 	if arg_present(vars) then vars = self.vars
+end
+
+pro das2dim::setproperty, KIND=kind
+	compile_opt idl2
+	if isa(kind) then self.kind = kind
 end
 
 function das2dim::init, _extra=ex
 	compile_opt idl2
 	
 	void = self.IDL_Object::init()
+	self.kind = 'unknown'
 	self.props = hash()
 	self.vars = hash()
 	return, !TRUE
@@ -41,5 +48,6 @@ end
 ;-
 pro das2dim__define
 	compile_opt idl2, hidden
-	void = { das2dim, inherits IDL_Object, props:obj_new(), vars:obj_new()}
+	void = { das2dim, inherits IDL_Object, kind:'', $
+	         props:obj_new(), vars:obj_new()}
 end

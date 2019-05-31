@@ -20,14 +20,14 @@
 ; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ; SOFTWARE.
 
-function das2var::init, _extra=ex
+function das2var::init, _EXTRA=ex
 	compile_opt idl2
 	void = self.IDL_Object::init()
 	
 	; default values
 	self.units = ''
-	;self.values = ptr_new()
-	;self.parser = ptr_new()
+	self.values = ptr_new()
+	self.parser = obj_new()
 	self.idxmap = [-1, -1, -1, -1]
 	
 	if(isa(ex)) then self.setproperty, _EXTRA=ex
@@ -39,16 +39,17 @@ pro das2var::getproperty, $
 	compile_opt idl2
 	if arg_present(units) then units = self.units
 	if arg_present(values) then values = self.values
-	if arg_present(idxmap) then values = self.idxmap
-	if arg_present(parser) then values = self.parser
+	if arg_present(idxmap) then idxmap = self.idxmap
+	if arg_present(parser) then parser = self.parser
 end
 
 pro das2var::setproperty, $
 	UNITS=units, VALUES=values, IDXMAP=idxmap, PARSER=parser
 	compile_opt idl2
 	
-	if isa(units) then self.units = units
-	if isa(values) then self.values = values
+	if isa(units) then self.units = units 
+	if isa(values) then self.values = ptr_new(values, /no_copy) 
+	if isa(parser) then self.parser = parser 
 	
 	; Maybe add checking code here to make sure that the index map 
 	; has no more non-zero entries than the values array?  I don't
@@ -59,8 +60,6 @@ pro das2var::setproperty, $
 		if iStop gt 3 then iStop = 3
 		for i=0,iStop do self.idxmap[i] = idxmap[i]
 	endif
-	
-	if isa(parser) then self.parser = parser
 end
 
 ;+

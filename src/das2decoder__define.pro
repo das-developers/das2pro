@@ -50,7 +50,10 @@ function das2decoder::decode, aPktData, debug=debug
 		message, 'Unexpected end of packet data'
 	
 	iEnd = self.iOffset + self.nItems*self.nSize - 1
-   aMine = aPktData[self.iOffset, iEnd]
+	;printf, -2, 'das2decoder::decode, transating bytes',self.iOffset,$
+	;    'to',iEnd, 'packet data has size',n_elements(aPktData)
+		 
+   aMine = aPktData[self.iOffset : iEnd]
 	   
    ; Get array of properly sized byte strings
    aVals = reform(aMine, self.nSize, self.nItems)
@@ -78,13 +81,13 @@ function das2decoder::decode, aPktData, debug=debug
 		
    endif
 
-   if strcmp(sType, 'ascii', 5) then begin
+   if strcmp(self.sType, 'ascii', 5) then begin
      aTmp = float(string(aVals))
      if n_elements(aTmp) ne self.nItems then message, 'Item number mismatch in decoding'
      return, aTmp
    endif
 
-   if strcmp(sType, 'time', 4) then begin ; no case fold on purpose
+   if strcmp(self.sType, 'time', 4) then begin ; no case fold on purpose
      aTmp = strtrim( string(aVals), 2)    ; remove spaces to clean times
 	  aTmp2 = make_array(n_elements(aTmp), /L64)
 	  
@@ -101,8 +104,13 @@ end
 
 
 ;+
-; Initialize a das2 stream data value decoder.  Handles coversion of time values
-; to TT2000
+; Initialize a das2 stream data value decoder.  Handles coversion of 
+; time values to TT2000.
+;
+; :Private:
+;
+; TODO: This should be in das2_parsestream.pro since it uses packet 
+;       headers.
 ;
 ; :Param:
 ;    hPlane : in, required, type=hash
@@ -117,6 +125,7 @@ function das2decoder::init, iOffset, hPlane
 	self.sType = hPlane['%type']
 	b = stregex(self.sType, '[0-9]{1,2}$', /extract)
 	self.nSize = uint(b)
+	;printf, -2, 'das2decoder::init, ', self.sType, 'item size = ', self.nSize
 	
 	self.nItems = 1
 	if hPlane.haskey('%nitems') then self.nItems = uint(hPlane['%nitems'])
