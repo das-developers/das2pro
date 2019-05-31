@@ -541,22 +541,42 @@ function _das2_onData, aBuffer, iBuf, messages, dataset
 				; if decode failure...
 				if aVals eq !null then return, !false
 				
-				if var.values eq ptr_new() then begin
-					;printf, -2, 'DEBUG: _das2_onData, first call'
-					var.values = aVals ;ptr_new(aVals, /NO_COPY) 
-				endif else begin
-					;printf, -2, 'DEBUG: _das2_onData, subsequent call'
-					ary = *(var.values)
+				if var.values eq ptr_new() then var.values = list()
+				(*(var.values)).add, aVals
 					
-					; Does this redefine the array and thus break the pointer???
-					ary = [ary, aVals]
-					;var.values = [var.values, aVals]
-				endelse
 			endif
 		endfor 
 	endfor
 	return, !true
 end
+
+;+
+; Convert all the variable value lists to arrays
+;-
+pro _das2_onFinish, lDatasets
+	compile_opt idl2, hidden
+	
+	for i = 0, n_elements(lDatasets) - 1 do begin
+		dataset = lDatasets[i]
+		
+		aDims = dataset.dims.keys()
+	
+		for d = 0, n_elements(aDims) - 1 do begin
+			dim = dataset.dims[ aDims[d] ]
+			
+			aVar = dim.vars.keys()
+			for v = 0, n_elements(aVar) - 1 do begin
+				var = dim.vars[ aVar[v] ]
+				
+				if typename(*(var.values)) eq 'LIST' then begin
+					var.values = reform( (*(var.values)).ToArray())					
+				endif
+			endfor 
+		endfor
+	endfor
+end
+
+
 
 ;+
 ; Look to see if a message was an exception, if it was, format it as
@@ -667,7 +687,7 @@ function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
 		endelse
 	endwhile
 	
-	printf, -2, lAllDs[0]
+	_das2_onFinish, lAddDs
 	
 	return, lAllDs
 end
