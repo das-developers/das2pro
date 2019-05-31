@@ -132,12 +132,18 @@ function das2ds::_overloadPrint
 			var = dim.vars[sRole]
 			
 			if var.values eq ptr_new() then begin
-				sType = 'NO_DATA_YET' 
+				sType = 'NO_DATA_YET'
 			endif else begin
-				sType = typename(*(var.values))
-				printf, -2, n_elements(*(var.values))
+				aSize = size(*(var.values), /DIMENSIONS)
+				sSz = ''
+				for iIdx=0,n_elements(aSize) - 1 do begin
+					sTmp = string(aSize[iIdx], format='%d')
+					if iIdx eq 0 then sSz += sTmp else sSz += ', '+sTmp
+				endfor
+
+				sType = sSz + ' ' + typename(*(var.values))
 			endelse
-						
+			
 			sOut += nl + string(sDimName, sRole, sType, var.units, $
 			                    format='      Variable: %s[''%s''] (%s) %s')
 		endfor

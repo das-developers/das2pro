@@ -60,13 +60,13 @@ function das2decoder::decode, aPktData, debug=debug
 
    if stregex(self.sType, 'real4$', /boolean) then begin
       if self.bBigE then return, swap_endian(reform(float(aVals, 0, 1, self.nItems))) $
-      else return, reform(float(aVals, 0, 1, dim))
+      else return, reform(float(aVals, 0, 1, self.nItems))
    endif
 
    if stregex(self.sType, 'real8$', /boolean) then begin
 	
       if self.bBigE then aTmp = swap_endian(reform(double(aVals, 0, 1, self.nItems))) $
-      else aTmp = reform(double(aVals, 0, 1, dim))
+      else aTmp = reform(double(aVals, 0, 1, self.nItems))
 		
 		; Convert to TT2000 if these are time values
 		if self.sEpoch ne '' then begin
@@ -125,7 +125,6 @@ function das2decoder::init, iOffset, hPlane
 	self.sType = hPlane['%type']
 	b = stregex(self.sType, '[0-9]{1,2}$', /extract)
 	self.nSize = uint(b)
-	;printf, -2, 'das2decoder::init, ', self.sType, 'item size = ', self.nSize
 	
 	self.nItems = 1
 	if hPlane.haskey('%nitems') then self.nItems = uint(hPlane['%nitems'])

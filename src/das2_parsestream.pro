@@ -543,6 +543,11 @@ function _das2_onData, aBuffer, iBuf, messages, dataset
 				
 				if var.values eq ptr_new() then var.values = list()
 				(*(var.values)).add, aVals
+				
+				;sTmp = string(n_elements(aVals), format='%d')
+				;printf, -2, sTmp, ' more value(s), new size of ', $
+				;            aDims[d], '[''', aVar[v], '''] is', $
+				;				size(*(var.values), /DIMENSIONS)
 					
 			endif
 		endfor 
@@ -555,9 +560,11 @@ end
 ;-
 pro _das2_onFinish, lDatasets
 	compile_opt idl2, hidden
+	;printf, -2, '_das2_onFinish'
 	
 	for i = 0, n_elements(lDatasets) - 1 do begin
 		dataset = lDatasets[i]
+		;printf, -2, 'dataset', i
 		
 		aDims = dataset.dims.keys()
 	
@@ -568,8 +575,15 @@ pro _das2_onFinish, lDatasets
 			for v = 0, n_elements(aVar) - 1 do begin
 				var = dim.vars[ aVar[v] ]
 				
+				;printf, -2, 'debug _das2_onFinish, *var.values type = ', typename(*(var.values))
+				
 				if typename(*(var.values)) eq 'LIST' then begin
-					var.values = reform( (*(var.values)).ToArray())					
+					var.values = reform( (*(var.values)).ToArray())
+					
+					
+				; set to the proper units for any time types
+				if _das2_nameFromUnits(var.units) eq 'time' then var.units = 'TT2000'
+				
 				endif
 			endfor 
 		endfor
@@ -687,7 +701,7 @@ function _das2_parsePackets, hStrmHdr, buffer, DEBUG=bDebug, MESSAGES=sMsg
 		endelse
 	endwhile
 	
-	_das2_onFinish, lAddDs
+	_das2_onFinish, lAllDs
 	
 	return, lAllDs
 end
