@@ -414,11 +414,17 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 	; for each one.
 	iOffset = 0
 	xDimFirst = !null
+		
+	; REMEMEBER! Index maps are backwards for IDL.
 	
-	; The first overall dataset index is the only index that changes
+	; The last overall dataset index is the only index that changes
 	; the values read for <x><y> and <z> planes
+	
 	idxmap[0] = 0
-	if nIndices eq 2 then idxmap[1] = -1
+	if nIndices eq 2 then begin 
+		idxmap[0] = -1
+		idxmap[1] = 0
+	endif
 	
 	sKind = 'Coordinate'
 	iOffset = _das2_addDimsFromHdr( $
@@ -447,8 +453,8 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 		hPlane = hPkt['yscan']
 		if typename(hPlane) eq 'LIST' then hPlane = hPlane[0]
 				
-		idxmap[0] = -1
-		idxmap[1] = 0
+		idxmap[0] = 0  ; rem: fortran, fast moving index first
+		idxmap[1] = -1  
 		
 		; the actual data values can be enumerated or come form a generator
 		nItems = fix(hPlane['%nitems'])
