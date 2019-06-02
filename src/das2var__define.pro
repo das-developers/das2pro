@@ -63,6 +63,67 @@ pro das2var::setproperty, $
 end
 
 ;+
+; Provide index ranges for this variable in terms of the top level dataset
+; index space.
+;
+; Cordinate variables often have lower dimensional arrays than the data
+; variables.  For example, think of an insturment that collects energetic
+; partical hit-counts in 45 energy bands once per minute.  The coordinates of 
+; this dataset would be energy and time, with the data being the count rate.
+; An hour's worth of these measurements could be stored in the following
+; arrays:
+; 
+; ```
+;    aTime    = long64arr(60)
+;    aEnergy  = fltarr(45)
+;    aCounts  = intarr(45, 60)
+; ```
+;
+; Looking at the index ranges for this simple dataeset it's apparent that the
+; first index of array aTime must correspond to the second index of array 
+; aCounts.  To help visualize this mapping, especially when datasets become
+; more complex, we could "line-up" all the index ranges to make the mapping
+; more explicit:
+;
+; ```
+; Values   Extents
+; ------   -------
+; Time     [ - , 60]
+; Energy   [ 45, - ]
+; Counts   [ 45, 60]
+; ```
+;
+; This is what the idxmap function outputs, the mapping of index space of a
+; single array to the overall dataset index space.  Assume now that these
+; arrays are actually the `.values` member of three different das2var objects.
+; Calling `.idxmap()` would yield the following (without comments of course):
+;
+; ```
+; print, vTime.idxmap() 
+;   -1      0      ; var is degenerate in first dataset index (0 values)
+;    0     60      ; second dataset index maps to first var index (60 values)
+;
+; print, vEnergy.idxmap()
+;    0     45      ; first dataset index maps to first var index (45 values)
+;   -1      0      ; var is degenerate in the second dataset index (0 values)
+;
+; print, vCounts.idxmap()
+;    0     45      ; first dataset index maps to first var index (45 values)
+;    1     60      ; second dataset index maps to second var index (60 values)
+; ```
+;
+; :Returns:
+;   A N by 2 array, where N is the number of independent indexes required to
+;   correlate all values in a dataset.
+;
+; :Author: Chris Piker
+;-
+function das2var::map
+	
+	return, !null
+end
+
+;+
 ; Das2 Variable, an array, it's units and it's index map.
 ;-
 pro das2var__define

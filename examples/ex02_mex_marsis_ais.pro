@@ -9,7 +9,7 @@ pro ex02_mex_marsis_ais
 	sDataset = 'Mars_Express/MARSIS/Spectrogram'
 	sMin = '2005-08-06T00:52:09'
 	sMax = '2005-08-06T00:52:17'
-	sFmt = "%s?server=dataset&dataset=%s&start_time=%s&end_time=%s"
+	sFmt = '%s?server=dataset&dataset=%s&start_time=%s&end_time=%s'
 	sUrl = string(sServer, sDataset, sMin, sMax, format=sFmt)
 	
 	; Get datasets from a web server.  The sMsg varible will hold any

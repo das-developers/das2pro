@@ -154,9 +154,32 @@ function das2ds::_overloadPrint
 end
 
 ;+
-; Das2 dataset object, holds overall dataset properties and 1-N physical
-; dimension objects.  All sub-arrays of a dataset are correlated in index
-; space.
+; Dataset objects (das2ds) explicitly denote, and separate, array index
+; dimensions and physical dimensions.
+;
+; For each physical space, such as Time or Spectral Density, there is a das2dim
+; (das2 dimension) member object of a dataset.  Each dimension may have more
+; than one set of applicable values.  For example in the Time dimension there
+; may be a set of values that represent when a measurement was taken in UTC 
+; and, the time uncertianty in seconds.  Each set of measurements and thier
+; units are contained within a das2var (das2 variable) object.
+;
+; To make plots and analyze data we have to know which values "go together".
+; Considering an energy spectra dataset for a moment, we would need to know
+; what array index numbers should be used to match a time, with an energy level
+; with a count rate, with a look direction.  This is a bookkeeping problem.
+; We could solve this problem in a manner similar to the ISTP standard by
+; insisting that each dimension of an array correspond with a single physical
+; dimension.  Doing so quickly results in display tools confusing index space
+; for physical space, a problem that we want to avoid.  Instead, to provide this
+; information, an overall dataset index space is defined.  Each variable within
+; the dataset provides a mapping between it's array indices and the overall 
+; dataset index space.  This mapping can be used to correlate values from
+; various arrays without constraining the nature of the physical measurements
+; contained within the dataset.
+;
+; :Author:
+;    Chris Piker
 ;-
 pro das2ds__define
 	compile_opt idl2, hidden
