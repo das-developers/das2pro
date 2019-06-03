@@ -422,8 +422,7 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 	
 	idxmap[0] = 0
 	if nIndices eq 2 then begin 
-		idxmap[0] = -1
-		idxmap[1] = 0
+		idxmap[1] = -1
 	endif
 	
 	sKind = 'Coordinate'
@@ -453,8 +452,8 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 		hPlane = hPkt['yscan']
 		if typename(hPlane) eq 'LIST' then hPlane = hPlane[0]
 				
-		idxmap[0] = 0  ; rem: fortran, fast moving index first
-		idxmap[1] = -1  
+		idxmap[0] = -1  ; seems backwards from fortran order, possibly since
+		idxmap[1] = 0   ; it was created using a list() operation
 		
 		; the actual data values can be enumerated or come form a generator
 		nItems = fix(hPlane['%nitems'])

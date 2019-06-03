@@ -28,7 +28,7 @@ function das2var::init, _EXTRA=ex
 	self.units = ''
 	self.values = ptr_new()
 	self.parser = obj_new()
-	self.idxmap = [-1, -1, -1, -1]
+	self.idxmap = ptr_new()
 	
 	if(isa(ex)) then self.setproperty, _EXTRA=ex
 	return, !TRUE
@@ -39,7 +39,7 @@ pro das2var::getproperty, $
 	compile_opt idl2
 	if arg_present(units) then units = self.units
 	if arg_present(values) then values = self.values
-	if arg_present(idxmap) then idxmap = self.idxmap
+	if arg_present(idxmap) then idxmap = *(self.idxmap)
 	if arg_present(parser) then parser = self.parser
 end
 
@@ -56,9 +56,7 @@ pro das2var::setproperty, $
 	; want this function to be annoying to code that sets the index
 	; before the array is set, so let it go for now.
 	if isa(idxmap) then begin
-		iStop = n_elements(idxmap) - 1
-		if iStop gt 3 then iStop = 3
-		for i=0,iStop do self.idxmap[i] = idxmap[i]
+		self.idxmap = ptr_new(idxmap) ; copies internally by default
 	endif
 end
 
@@ -96,32 +94,79 @@ end
 ; This is what the idxmap function outputs, the mapping of index space of a
 ; single array to the overall dataset index space.  Assume now that these
 ; arrays are actually the `.values` member of three different das2var objects.
-; Calling `.idxmap()` would yield the following (without comments of course):
+; Calling `.dshape()` would yield the following (without comments of course):
 ;
 ; ```
-; print, vTime.idxmap() 
+; print, vTime.dshape() 
 ;   -1      0      ; var is degenerate in first dataset index (0 values)
 ;    0     60      ; second dataset index maps to first var index (60 values)
 ;
-; print, vEnergy.idxmap()
+; print, vEnergy.dshape()
 ;    0     45      ; first dataset index maps to first var index (45 values)
 ;   -1      0      ; var is degenerate in the second dataset index (0 values)
 ;
-; print, vCounts.idxmap()
+; print, vCounts.dshape()
 ;    0     45      ; first dataset index maps to first var index (45 values)
 ;    1     60      ; second dataset index maps to second var index (60 values)
 ; ```
 ;
 ; :Returns:
-;   A N by 2 array, where N is the number of independent indexes required to
+;   A 2 by N array, where N is the number of independent indexes required to
 ;   correlate all values in a dataset.
 ;
 ; :Author: Chris Piker
 ;-
-function das2var::map
+function das2var::dshape
 	
-	return, !null
+	idxmap = *(self.idxmap)
+	
+	nIdxDims = n_elements(idxmap)
+	aShape = intarr(2, nIdxDims)
+	for i =0, nIdxDims - 1 do begin
+		aShape[0, i] = idxmap[i]
+		if idxmap[i] gt -1 then begin
+			arydims = size(*(self.values), /DIMENSIONS)
+			;printf, -2, 'val', *(self.values), 'array dims', arydims
+			aShape[1, i] =  arydims[ idxmap[i] ]
+		endif else aShape[1,i] = 0.0
+	endfor
+	
+	return, aShape
 end
+
+; Overloading this properly will involve array broadcasting, skip for now.
+;function das2var::_overloadBracketsRightSide, $
+;	isrange, sub1, sub2, sub3, sub4, sub5, sub6, sub7, sub8 
+;	
+;	if n_elements(isrange) gt n_elements(self.idxmap) then begin
+;		;todo: improve error message
+;		message, 'Number of index dimensions, exceeds dataset dimensions in array index operation'
+;	endif
+;	
+;	if n_elements(isrange) eq 0 then return, !null 
+;	
+;	case n_elements(isrange) of
+;		1: aDsIdx = [sub1]
+;		2: aDsIdx = [sub1, sub2]
+;		3: aDsIdx = [sub1, sub2, sub3]
+;		4: aDsIdx = [sub1, sub2, sub3, sub4]
+;		5: aDsIdx = [sub1, sub2, sub3, sub4, sub5]
+;		6: aDsIdx = [sub1, sub2, sub3, sub4, sub5, sub6]
+;		7: aDsIdx = [sub1, sub2, sub3, sub4, sub5, sub6, sub7]
+;		8: aDsIdx = [sub1, sub2, sub3, sub4, sub5, sub6, sub7, sub8]
+;	else: message, 'Syntax error: NULL array index'
+;	endcase
+;	
+;	lVarIdx = make
+;	
+;	for i = 0, n_elements(aDsIdx) - 1 do begin
+;	
+;	
+;	endfor
+;	
+;	return, !null
+;end
+
 
 ;+
 ; Das2 Variable, an array, it's units and it's index map.
@@ -130,6 +175,6 @@ pro das2var__define
 	compile_opt idl2, hidden
 	void = { $
 		das2var, inherits IDL_Object, units:'', values:ptr_new(), $
-		parser:obj_new(), idxmap: [-1, -1, -1, 0] $
+		parser:obj_new(), idxmap: ptr_new() $
 	}
 end

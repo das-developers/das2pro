@@ -20,6 +20,16 @@
 ; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ; SOFTWARE.
 
+function das2dim::init, _extra=ex
+	compile_opt idl2
+	
+	void = self.IDL_Object::init()
+	self.kind = 'unknown'
+	self.props = hash()
+	self.vars = hash()
+	return, !TRUE
+end
+
 pro das2dim::getproperty, PROPS=props, VARS=vars, KIND=kind
 	compile_opt idl2
 	if arg_present(kind) then kind = self.kind
@@ -32,14 +42,17 @@ pro das2dim::setproperty, KIND=kind
 	if isa(kind) then self.kind = kind
 end
 
-function das2dim::init, _extra=ex
-	compile_opt idl2
+function das2dim::_overloadBracketsRightSide, $
+	isrange, sub1, sub2, sub3, sub4, sub5, sub6, sub7, sub8 
+
+	if (max(isrange) gt 0) then begin
+		message, 'Ranges not supported for dataset indexes'
+	endif
 	
-	void = self.IDL_Object::init()
-	self.kind = 'unknown'
-	self.props = hash()
-	self.vars = hash()
-	return, !TRUE
+	var = !null
+	if n_elements(sub1) then var = self.vars[sub1] else return, !null
+	
+	return, var
 end
 
 ;+

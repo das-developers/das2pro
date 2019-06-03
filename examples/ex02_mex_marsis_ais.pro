@@ -27,9 +27,18 @@ pro ex02_mex_marsis_ais
 
 	; There is typically only one dataset for homogeneous streams
 	ds = lDs[0]
-	
+		
 	; Let's see what it contains
 	print, ds
+	;print, ' '
+	;print, 'time', ds['time', 'center'].dshape()
+	;print, 'frequency', ds['frequency','center'].dshape()
+	;print, 'spectrum', ds['spectrum', 'center'].dshape()
+	;print, ' '
+	;print, (*(ds['spectrum','center'].values))[0,0]
+	;print, (*(ds['spectrum','center'].values))[1,0]
+	
+	;print, ds['spectrum','center'][1, 40]
 	
 	
 	

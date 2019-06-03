@@ -75,6 +75,22 @@ function das2ds::recsize
 	return, nRecBytes
 end
 
+function das2ds::_overloadBracketsRightSide, $
+	isrange, sub1, sub2, sub3, sub4, sub5, sub6, sub7, sub8 
+
+	if (max(isrange) gt 0) then begin
+		message, 'Ranges not supported for dataset indexes'
+	endif
+	
+	dim = !null
+	if n_elements(sub1) then dim = self.dims[sub1] else return, !null
+	
+	var = !null
+	if n_elements(sub2) then var = dim.vars[sub2] else return, dim
+	
+	return, var
+end
+
 ;+
 ; Inspect all owned variables and get the index range of the
 ; overall dataset.  Map sizes to array dimensions using the 
