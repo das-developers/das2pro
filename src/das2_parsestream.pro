@@ -137,6 +137,9 @@ function _das2_dimFromHdr, hStream, sPlaneType, hPlane, sKind
 	
 	; First add all stream properites
 	if hStream.haskey('properties') then begin
+	
+		printf, -2, 'making dim using:  ', hStream['properties']
+	
 		; there's probably a better hash key iteration idiom than this in IDL
 		d = hStream['properties']
 		k = d.keys()
@@ -150,7 +153,7 @@ function _das2_dimFromHdr, hStream, sPlaneType, hPlane, sKind
 			if n_elements(lTmp) gt 1 then begin
 				sType = (lTmp[0]).substring(1,-1)
 				sKey = lTmp[1]
-			endif
+			endif else sKey = sKey.substring(1,-1)
 			
 			sAx = sKey.charat(0) 
 			if sAx eq sPlaneType then begin
@@ -178,7 +181,7 @@ function _das2_dimFromHdr, hStream, sPlaneType, hPlane, sKind
 			if n_elements(lTmp) gt 1 then begin
 				sType = (lTmp[0]).substring(1,-1)
 				sKey = lTmp[1]
-			endif
+			endif else sKey = sKey.substring(1,-1)
 			
 			sAx = sKey.charat(0) 
 			if sAx eq sPlaneType then begin
