@@ -76,19 +76,30 @@ function das2ds::recsize
 end
 
 function das2ds::_overloadBracketsRightSide, $
-	isrange, sub1, sub2, sub3, sub4, sub5, sub6, sub7, sub8 
-
-	if (max(isrange) gt 0) then begin
-		message, 'Ranges not supported for dataset indexes'
+	isrange, d, r, i, j, k, l, m, n 
+	
+	if isrange[0] gt 0 then begin
+		message, 'Range selection not supported for physical dimensions, i.e. no ''time'':''frequency'' slices'
 	endif
 	
-	dim = !null
-	if n_elements(sub1) then dim = self.dims[sub1] else return, !null
+	if (n_elements(isrange)) gt 1 && (isrange[1] gt 0) then begin
+		message, 'Range selection not supported for variable roles, i.e. no ''center'':''min'' slices'
+	endif
 	
-	var = !null
-	if n_elements(sub2) then var = dim.vars[sub2] else return, dim
+	if n_elements(isrange) gt 2 then rng = isrange[2:-1]
 	
-	return, var
+	case n_elements(isrange) of
+		1: return, self.dims[d]
+		2: return, self.dims[d].vars[r]
+		3: return, self.dims[d].vars[r]._overloadBracketsRightSide(rng, i)
+		4: return, self.dims[d].vars[r]._overloadBracketsRightSide(rng, i, j)
+		5: return, self.dims[d].vars[r]._overloadBracketsRightSide(rng, i, j, k)
+		6: return, self.dims[d].vars[r]._overloadBracketsRightSide(rng, i, j, k, l)
+		7: return, self.dims[d].vars[r]._overloadBracketsRightSide(rng, i, j, k, l, m)
+		8: return, self.dims[d].vars[r]._overloadBracketsRightSide(rng, i, j, k, l, m, n)
+	else: message, 'Syntax error: empty array index'
+	endcase
+	
 end
 
 ;+

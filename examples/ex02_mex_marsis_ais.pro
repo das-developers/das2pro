@@ -30,15 +30,24 @@ pro ex02_mex_marsis_ais
 		
 	; Let's see what it contains
 	print, ds
-	;print, ' '
-	;print, 'time', ds['time', 'center'].dshape()
-	;print, 'frequency', ds['frequency','center'].dshape()
-	;print, 'spectrum', ds['spectrum', 'center'].dshape()
-	;print, ' '
-	;print, (*(ds['spectrum','center'].values))[0,0]
-	;print, (*(ds['spectrum','center'].values))[1,0]
 	
-	;print, ds['spectrum','center'][1, 40]
+	print, ' '
+	print, 'time', ds['time', 'center'].dshape()
+	print, 'frequency', ds['frequency','center'].dshape()
+	print, 'spectrum', ds['spectrum', 'center'].dshape()
+	print, ' '
+	print, (*(ds['spectrum','center'].values))[0,0]
+	print, (*(ds['spectrum','center'].values))[1,0]
+	
+	print, ((ds['spectrum'])['center'])[0, 40]
+	print, (ds['spectrum', 'center'])[1, 40]
+	print, (*(ds['spectrum','center'].values))[0:4,0]
+	
+	var = ds['spectrum','center']
+	
+	print, var[0:4, 0]
+	
+	print, ds['spectrum','center', 0:4, 0]
 	
 	
 	

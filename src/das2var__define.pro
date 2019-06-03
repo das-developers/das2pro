@@ -134,38 +134,117 @@ function das2var::dshape
 	return, aShape
 end
 
-; Overloading this properly will involve array broadcasting, skip for now.
-;function das2var::_overloadBracketsRightSide, $
-;	isrange, sub1, sub2, sub3, sub4, sub5, sub6, sub7, sub8 
-;	
-;	if n_elements(isrange) gt n_elements(self.idxmap) then begin
-;		;todo: improve error message
-;		message, 'Number of index dimensions, exceeds dataset dimensions in array index operation'
-;	endif
-;	
-;	if n_elements(isrange) eq 0 then return, !null 
-;	
-;	case n_elements(isrange) of
-;		1: aDsIdx = [sub1]
-;		2: aDsIdx = [sub1, sub2]
-;		3: aDsIdx = [sub1, sub2, sub3]
-;		4: aDsIdx = [sub1, sub2, sub3, sub4]
-;		5: aDsIdx = [sub1, sub2, sub3, sub4, sub5]
-;		6: aDsIdx = [sub1, sub2, sub3, sub4, sub5, sub6]
-;		7: aDsIdx = [sub1, sub2, sub3, sub4, sub5, sub6, sub7]
-;		8: aDsIdx = [sub1, sub2, sub3, sub4, sub5, sub6, sub7, sub8]
-;	else: message, 'Syntax error: NULL array index'
-;	endcase
-;	
-;	lVarIdx = make
-;	
-;	for i = 0, n_elements(aDsIdx) - 1 do begin
-;	
-;	
-;	endfor
-;	
-;	return, !null
-;end
+;+
+; Provide access to the underlying value using standard array indexing.
+;
+; Due to limitations of the IDL language (i.e. array._overloadBracketsRightSide
+; doesn't exist) ranges are only supported up to 3 index dimensions.  To
+; get a block range for arrays larger than rank 3 use the .array() method to
+; get the array variable directly.
+;
+; To avoid suprise return values when gathing a slice of data, the indexmap
+; is ignore.  If you are getting single values (not recommended in IDL) and
+; wish to work in dataset index space use the .at() method.
+;-
+
+function das2var::_overloadBracketsRightSide, $
+	rng, i, j, k, l, m, n, o, p 
+	
+	
+	; IDL, really?  The is-range/is-not-range info needs to stay with the slice
+	; objects.  If not, you end up with insane combinatoric problems like this
+	; one.  There is probably some sort of introspection will prevent the code
+	; below, but I don't know what it would be.
+	;
+	; POSIX defines vsprintf for *exactly* the same reason as this.  There is
+	; no way to capture the information [1,2,1] + bIsRange and send it to a 
+	; sub array without *explicity syntax*.  Even the IDL example at:
+	;
+	;    https://www.harrisgeospatial.com/docs/Example__Overloading_the1.html
+	;
+	; totally glosses over the fact that range specifications can't be deligated
+	; to sub objects in a simple manner.
+	;
+	; Maybe there's an iterative way to get this done using reform but I'm not
+	; sure what it is.
+	
+	vals = *(self.values)
+	
+	; Yay, simple for 1-D case
+	if n_elements(rng) eq 1 then begin
+		if rng[0] then begin
+			return, vals[i[0]:i[1]:i[2]]
+		endif else begin
+			return, vals[i             ]
+		endelse
+	endif
+	
+	; Wow wait, this is getting big fast (2**x)....
+	if n_elements(rng) eq 2 then begin
+
+		if            (~ rng[0]) && (~ rng[1]) then begin
+			return, vals[i,              j             ]
+			
+		endif else if (~ rng[0]) && (  rng[1]) then begin
+			return, vals[i,              j[0]:j[1]:j[2]]
+			
+		endif else if (  rng[0]) && (~ rng[1]) then begin
+			return, vals[i[0]:i[1]:i[2], j             ]
+			
+		endif else begin
+			return, vals[i[0]:i[1]:i[2], j[0]:j[1]:j[2]]
+			
+		endelse
+	endif
+	
+	; Okay, this is insane, but one more, 'cause we're crazy too.
+	if n_elements(rng) eq 3 then begin
+		 
+		if            (~ rng[0]) && (~ rng[1]) && (~ rng[2]) then begin
+			return, vals[i,              j,              k            ]
+		
+		endif else if (~ rng[0]) && (~ rng[1]) && (  rng[2]) then begin
+			return, vals[i,              j,              k[0]:k[1]:k[2]]
+		
+		endif else if (~ rng[0]) && (  rng[1]) && (~ rng[2]) then begin
+			return, vals[i,              j[0]:j[1]:j[2], k            ]
+		
+		endif else if (~ rng[0]) && (  rng[1]) && (  rng[2]) then begin
+			return, vals[i,              j[0]:j[1]:j[2], k[0]:k[1]:k[2]]
+		
+		endif else if (  rng[0]) && (~ rng[1]) && (~ rng[2]) then begin
+			return, vals[i[0]:i[1]:i[2], j,              k            ]	
+		
+		endif else if (  rng[0]) && (~ rng[1]) && (  rng[2]) then begin
+			return, vals[i[0]:i[1]:i[2], j,              k[0]:k[1]:k[2]]
+		
+		endif else if (  rng[0]) && (  rng[1]) && (~ rng[2]) then begin
+			return, vals[i[0]:i[1]:i[2], j[0]:j[1]:j[2], k            ]
+		
+		endif else begin
+			return, vals[i[0]:i[1]:i[2], j[0]:j[1]:j[2], k[0]:k[1]:k[2]]
+		
+		endelse
+		
+	endif
+	
+	; Stopping here, as dimension 8 would be a 256 part if statement...
+	if n_elements(rng) gt 3 then begin
+		if max(rng) gt 0 then begin
+			message, 'Range selections not currently supported for rank 3 arrays and above'
+		endif
+	endif			
+	
+	case n_elements(rng) of
+		4: return, (*(self.values))[i, j, k, l]
+		5: return, (*(self.values))[i, j, k, l, m]
+		6: return, (*(self.values))[i, j, k, l, m, n]
+		7: return, (*(self.values))[i, j, k, l, m, n, o]
+		8: return, (*(self.values))[i, j, k, l, m, n, o, p]
+	else: message, 'Syntax error: empty array index'
+	endcase
+		
+end
 
 
 ;+

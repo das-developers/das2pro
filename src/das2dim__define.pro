@@ -43,16 +43,25 @@ pro das2dim::setproperty, KIND=kind
 end
 
 function das2dim::_overloadBracketsRightSide, $
-	isrange, sub1, sub2, sub3, sub4, sub5, sub6, sub7, sub8 
-
-	if (max(isrange) gt 0) then begin
-		message, 'Ranges not supported for dataset indexes'
+	isrange, r, i, j, k, l, m, n, o
+	
+	if isrange[0] gt 0 then begin
+		message, 'Range selection not supported for variable roles, i.e. no ''center'':''min'' slices'
 	endif
 	
-	var = !null
-	if n_elements(sub1) then var = self.vars[sub1] else return, !null
-	
-	return, var
+	if n_elements(isrange) gt 1 then rng = isrange[1:-1]
+
+	case n_elements(isrange) of
+		1: return, self.vars[r]
+		2: return, self.vars[r]._overloadBracketsRightSide(rng, i)
+		3: return, self.vars[r]._overloadBracketsRightSide(rng, i, j)
+		4: return, self.vars[r]._overloadBracketsRightSide(rng, i, j, k)
+		5: return, self.vars[r]._overloadBracketsRightSide(rng, i, j, k, l)
+		6: return, self.vars[r]._overloadBracketsRightSide(rng, i, j, k, l, m)
+		7: return, self.vars[r]._overloadBracketsRightSide(rng, i, j, k, l, m, n)
+		8: return, self.vars[r]._overloadBracketsRightSide(rng, i, j, k, l, m, n, o)
+	else: message, 'Syntax error: empty array index'
+	endcase
 end
 
 ;+
