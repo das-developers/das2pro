@@ -1,26 +1,58 @@
-; include das2 modules
-@das2
+; Program to get and print a single Cassini Waveforms
 
-; -- $MAIN$ ------------------------------------
-;http://planet.physics.uiowa.edu/das/das2Server?server=dataset&dataset=&start_time=&end_time=
-dataSet = 'Cassini/RPWS/HiRes_MidFreq_Waveform'
-sTime = '2004-11-15T00:40:50.400'
-fTime = '2004-11-15T00:40:50.500'
-params = ['10khz','Ew=false']
-d = das2reader(dataSet, sTime, fTime, params=params, /verbose)
+pro ex01_cassini_rpws_wfrm
+	compile_opt idl2
+	
+	; Generate the URL for the desired subset, we'll use a low-level
+	; function for now, as catalog lookup is not yet implemented.
 
-; help, d[0] ; print stream header
-prop = d[1].packet.yscan
+	sServer = 'http://planet.physics.uiowa.edu/das/das2Server'
+	sDataSet = 'Cassini/RPWS/HiRes_MidFreq_Waveform'
+	sBeg = '2004-11-15T00:40:50.400'
+	sEnd = '2004-11-15T00:40:50.500'
+	sParams = '10khz Ew=false'
+	sFmt = '%s?server=dataset&dataset=%s&start_time=%s&end_time=%s&params=%s'
+	sUrl = string(sServer, sDataset, sBeg, sEnd, sParams, format=sFmt)
 
-tt2000 = das2_double_to_tt2000(d[1].packet.x._units, d[1].xdata)
-timestamp = cdf_encode_tt2000(tt2000, epoch=3)
-p = plot(d[1].ydata * 1e3, d[1].zdata, xtit='Time [ms] from ' + timestamp, ytit=prop.properties._string_zlabel, $
-         tit=d[0].stream.properties._string_title, dimensions=[1800, 600], /buffer, xst=1)
-p.xthick = 4.
-p.ythick = 4.
-p.thick = 3.
-p.font_size = 24
-p.tit.font_size = 24
-p.save, 'run_example.png', width=3600, height=1200, resolution=300
+	; Get the dataset
+	lDs = das2_readhttp(sUrl, messages=sMsg)
+
+	if lDs eq !null then begin
+		printf, -2, sMsg
+		stop
+	endif
+	
+	ds = lDs[0]
+	print, n_elements(lDs), format="%d datesets read, first dataset contains:"
+	print, ds
+	
+	xSampleTimes = ds['time','offset'].array
+	xUnits = ds['time','offset'].units
+	
+	yWaveform = ds['WBR','center', *, 0]  ; Just get the first waveform
+	yUnits = ds['WBR','center'].units
+	
+	xStartTime = ds['time','reference', 0] ; And the first reference time
+	
+	sTime = cdf_encode_tt2000(xStartTime, epoch=3)
+	
+	sXlabel = string(xUnits, sTime, format='Time [%s] from %s')
+	sYlabel = ds['WBR'].props['label'].strval
+	sTitle = ds.props['title'].strval
+	
+	p = plot($
+		xSampleTimes, yWaveform, xtit=sXlabel, ytit=sYlabel, $
+	   tit=sTitle, dimensions=[1800, 600], /buffer, xst=1 $
+	)
+	p.xthick = 4.
+	p.ythick = 4.
+	p.thick = 3.
+	p.font_size = 24
+	p.tit.font_size = 24
+	
+	sFile = 'ex01_cassini_rpws_wfrm.png'
+	p.save, sFile, width=3600, height=1200, resolution=300
+	
+	print, 'Plot ', sFile, ' printed to the current directory'
 
 end

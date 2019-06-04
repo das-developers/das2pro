@@ -20,6 +20,7 @@
 ; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ; SOFTWARE.
 
+; --------------------------------------------------------------------------- ;
 function das2var::init, _EXTRA=ex
 	compile_opt idl2
 	void = self.IDL_Object::init()
@@ -34,15 +35,21 @@ function das2var::init, _EXTRA=ex
 	return, !TRUE
 end
 
+; --------------------------------------------------------------------------- ;
 pro das2var::getproperty, $
-	UNITS=units, VALUES=values, IDXMAP=idxmap, PARSER=parser
+	UNITS=units, VALUES=values, IDXMAP=idxmap, PARSER=parser, ARRAY=array
 	compile_opt idl2
 	if arg_present(units) then units = self.units
 	if arg_present(values) then values = self.values
 	if arg_present(idxmap) then idxmap = *(self.idxmap)
 	if arg_present(parser) then parser = self.parser
+	
+	if arg_present(array) then begin 
+		if self.values eq ptr_new() then array = !null else array = *(self.values)
+	endif
 end
 
+; --------------------------------------------------------------------------- ;
 pro das2var::setproperty, $
 	UNITS=units, VALUES=values, IDXMAP=idxmap, PARSER=parser
 	compile_opt idl2
@@ -60,6 +67,7 @@ pro das2var::setproperty, $
 	endif
 end
 
+; --------------------------------------------------------------------------- ;
 ;+
 ; Provide index ranges for this variable in terms of the top level dataset
 ; index space.
@@ -124,9 +132,10 @@ function das2var::dshape
 	aShape = intarr(2, nIdxDims)
 	for i =0, nIdxDims - 1 do begin
 		aShape[0, i] = idxmap[i]
-		if idxmap[i] gt -1 then begin
-			arydims = size(*(self.values), /DIMENSIONS)
-			;printf, -2, 'val', *(self.values), 'array dims', arydims
+		arydims = size(*(self.values), /DIMENSIONS)
+		
+		if idxmap[i] gt -1 then begin	
+			;printf, -2, 'idxmap:  ', idxmap, 'array dims:  ', arydims
 			aShape[1, i] =  arydims[ idxmap[i] ]
 		endif else aShape[1,i] = 0.0
 	endfor
@@ -134,6 +143,7 @@ function das2var::dshape
 	return, aShape
 end
 
+; --------------------------------------------------------------------------- ;
 ;+
 ; Provide access to the underlying value using standard array indexing.
 ;
@@ -246,7 +256,7 @@ function das2var::_overloadBracketsRightSide, $
 		
 end
 
-
+; --------------------------------------------------------------------------- ;
 ;+
 ; Das2 Variable, an array, it's units and it's index map.
 ;-

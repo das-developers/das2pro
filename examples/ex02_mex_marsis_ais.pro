@@ -4,8 +4,8 @@
 pro ex02_mex_marsis_ais
 	compile_opt idl2
 
-	; Generate the URL for the desired subset, we'll use a low-level non catalog
-	; function for now.
+	; Generate the URL for the desired subset, we'll use a low-level
+	; function for now, as catalog lookup is not yet implemented.
 	sServer = 'http://planet.physics.uiowa.edu/das/das2Server'
 	sDataset = 'Mars_Express/MARSIS/Spectrogram'
 	sMin = '2005-08-06T00:52:09'
@@ -32,10 +32,10 @@ pro ex02_mex_marsis_ais
 	; Let's see what it contains
 	print, ds
 	
-	print, ' '
-	print, 'time', ds['time', 'center'].dshape()
-	print, 'frequency', ds['frequency','center'].dshape()
-	print, 'spectrum', ds['spectrum', 'center'].dshape()
+	;print, ' '
+	;print, 'time', ds['time', 'center'].dshape()
+	;print, 'frequency', ds['frequency','center'].dshape()
+	;print, 'spectrum', ds['spectrum', 'center'].dshape()
 	;print, ' '
 	;print, (*(ds['spectrum','center'].values))[0,0]
 	;print, (*(ds['spectrum','center'].values))[1,0]
@@ -45,11 +45,11 @@ pro ex02_mex_marsis_ais
 	
 	; Test indexing, move this code to das2pro_ut.pro after das2_readfile() is
 	; implemented.
-	print, (*(ds['spectrum','center'].values))[0:4,0]
+	;print, (*(ds['spectrum','center'].values))[0:4,0]
 	
 	var = ds['spectrum','center']
 	
-	print, var[0:4, 0]
+	;print, var[0:4, 0]
 	
 	print, ds['spectrum','center', 0:4, 0]
 	

@@ -20,21 +20,39 @@
 ; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ; SOFTWARE.
 
+; --------------------------------------------------------------------------- ;
 function das2ds::init, _extra=ex
 	compile_opt idl2
 	
 	void = self.IDL_Object::init()
 	self.props = hash()
 	self.dims = hash()
+	self.rank = 0
 	return, !true
 end
 
-pro das2ds::getproperty, PROPS=props, DIMS=dims
+; --------------------------------------------------------------------------- ;
+pro das2ds::getproperty, PROPS=props, DIMS=dims, RANK=rank, GROUP=group, $
+  NAME=name
+  
 	compile_opt idl2
 	if arg_present(props) then props = self.props
 	if arg_present(dims) then dims = self.dims
+	if arg_present(rank) then rank = self.rank
+	if arg_present(name) then name = self.name
+	if arg_present(group) then group = self.group
 end
 
+pro das2ds::setproperty, RANK=rank, GROUP=group, NAME=name
+	compile_opt idl2
+	
+	if isa(units) then self.units = units
+	if isa(rank) then self.rank = rank
+	if isa(name) then self.name = name
+	if isa(group) then self.group = group
+end
+
+; --------------------------------------------------------------------------- ;
 ;+
 ; Answers the question, how big are data packets for this dataset.
 ;
@@ -48,6 +66,7 @@ end
 ;     
 ;-
 function das2ds::recsize
+	compile_opt idl2
 	
 	nRecBytes = 0
 	
@@ -75,8 +94,9 @@ function das2ds::recsize
 	return, nRecBytes
 end
 
-function das2ds::_overloadBracketsRightSide, $
-	isrange, d, r, i, j, k, l, m, n 
+; --------------------------------------------------------------------------- ;
+function das2ds::_overloadBracketsRightSide, isrange, d, r, i, j, k, l, m, n 
+	compile_opt idl2
 	
 	if isrange[0] gt 0 then begin
 		message, 'Range selection not supported for physical dimensions, i.e. no ''time'':''frequency'' slices'
@@ -102,6 +122,7 @@ function das2ds::_overloadBracketsRightSide, $
 	
 end
 
+; --------------------------------------------------------------------------- ;
 ;+
 ; Inspect all owned variables and get the index range of the
 ; overall dataset.  Map sizes to array dimensions using the 
@@ -109,21 +130,63 @@ end
 ;
 ; :Private:
 ;-
-
 function das2ds::_idxRangeStr
 	compile_opt idl2, hidden
+		
+	if self.rank lt 1 then return, ''
+	
+	aIdxVar  = ['i','j','k','l','m','n','o','p']
+	aOut     = strarr(self.rank)
+	aDsShape = intarr(self.rank)
+	
+	foreach dim, self.dims, sDim do begin
+		
+		foreach var, self.dims[sDim].vars, sRole do begin
+			
+			;printf, -2, 'Calling shape for ',sDim,':',sRole
+			aMap = var.dshape()
+			nMapDims = (size(aMap, /DIMENSIONS))[1]
 
-	return, 'todo,das2ds__idxRangeStr'
+			; If the map doesn't have the same dimensions as the dataset rank, 
+			; the dataset is inconsistant.			
+			if nMapDims ne self.rank then begin
+				sMsg = string( $
+					sDim, sRole, n_elements(var.idxmap), self.nRank, $
+					format='Inconsistant dataset, rank of variable %s[''%s''] is %d, expected %d' $
+				)
+				message, sMsg
+			endif
+			
+			for iDsAxis = 0, self.rank - 1 do begin
+				iVarAxis = aMap[0,iDsAxis] ; the var axis that maps to this DS axis
+				nVarSize = aMap[1,iDsAxis] ; the var extent in this axis
+				
+				; Var has no axis that maps to this dataset axis, just continue...
+				if iVarAxis lt 0 then continue 
+				
+				if aDsShape[ iDsAxis ] lt nVarSize then aDsShape[ iDsAxis ] = nVarSize
+			endfor		
+		endforeach
+	endforeach
+	
+	; have the max extents in each axis, now make the string
+	for i = 0, self.rank - 1 do begin
+		aOut[i] = string(aIdxVar[i], aDsShape[i], format='%s=0:%d')
+	endfor
+	
+	return, aOut.join(', ')
 end
 
+; --------------------------------------------------------------------------- ;
 function das2ds::_overloadPrint
 	compile_opt idl2, hidden
 
 	nl = string([10B])
+	aIdxVar  = ['i','j','k','l','m','n','o','p']
 
 	s = self._idxRangeStr()
-	n = self.recsize()
-	s = string(n, format='Record Size: %d bytes')
+	;n = self.recsize()
+	;s = string(n, format='Record Size: %d bytes')
 
 	sOut = string(self.name, self.group, s, format='Dataset: ''%s'' from group ''%s'' | %s')
 	aKeys = self.props.keys()
@@ -135,12 +198,12 @@ function das2ds::_overloadPrint
 	; TODO: Refactor this.  Dims and Variables should be responsible for
 	;       printing themselves instead of doing it all here
 	
-	aKeys = self.dims.keys()
 	
 	; TODO: Sort all data dimensions before all coordinate dimensions
-	
+	aKeys = self.dims.keys()	
 	for i = 0, n_elements(aKeys) - 1 do begin
-		dim = self.dims[aKeys[i]]
+		sDim = aKeys[i]
+		dim = self.dims[sDim]
 		
 		sDimName = aKeys[i]
 		
@@ -158,21 +221,16 @@ function das2ds::_overloadPrint
 			sRole = aSubKeys[j]
 			var = dim.vars[sRole]
 			
-			if var.values eq ptr_new() then begin
-				sType = 'NO_DATA_YET'
-			endif else begin
-				aSize = size(*(var.values), /DIMENSIONS)
-				sSz = ''
-				for iIdx=0,n_elements(aSize) - 1 do begin
-					sTmp = string(aSize[iIdx], format='%d')
-					if iIdx eq 0 then sSz += sTmp else sSz += ', '+sTmp
-				endfor
-
-				sType = sSz + ' ' + typename(*(var.values))
-			endelse
+			if var.values eq ptr_new() then sType = 'NO_DATA_YET'
 			
-			sOut += nl + string(sDimName, sRole, sType, var.units, $
-			                    format='      Variable: %s[''%s''] (%s) %s')
+			aSz = strarr(n_elements(var.idxmap))
+			for iDsAx=0,n_elements(var.idxmap) - 1 do begin
+				if (var.idxmap)[iDsAx] lt 0 then aSz[iDsAx] = '-' else aSz[iDsAx] = aIdxVar[iDsAx]
+			endfor
+			sSz = aSz.join(',')
+			sType = typename(*(var.values))
+			sOut += nl + string(sDimName, sRole, sSz, sType, var.units, $
+			                    format='      Variable: %s[''%s''][%s] (%s) %s')
 		endfor
 		
 	endfor
@@ -180,6 +238,7 @@ function das2ds::_overloadPrint
 	return, sOut + nl
 end
 
+; --------------------------------------------------------------------------- ;
 ;+
 ; Dataset objects (das2ds) explicitly denote, and separate, array index
 ; dimensions and physical dimensions.
@@ -218,7 +277,7 @@ pro das2ds__define
 	;
 	; for details
 	void = { $
-		das2Ds, inherits IDL_Object, name:'', group:'', $
+		das2Ds, inherits IDL_Object, name:'', group:'', rank:'', $
 		props:obj_new(), dims:obj_new() $
 	}
 end
