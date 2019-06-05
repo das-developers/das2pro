@@ -170,6 +170,11 @@ function _das2_dimFromHdr, hStream, sPlaneType, hPlane, sKind
 	; if no plane header, nothing to add at this point
 	if hPlane eq !null then return, dim
 	
+	; Pick up out-of-spec properties, just to be nice, but have regular 
+	; properties override them
+	if hPlane.haskey('%label') then $
+		dim.props['label'] = das2prop(type='String', value=hPlane['%label'])
+	
 	; now override with local properties
 	if hPlane.haskey('properties') then begin
 		; there's probably a better hash key iteration idiom than this in IDL
@@ -197,9 +202,26 @@ function _das2_dimFromHdr, hStream, sPlaneType, hPlane, sKind
 			;       our axis tag?  
 		endfor
 	endif
-	
+		
 	return, dim
 end
+
+; --------------------------------------------------------------------------- ;
+;+
+; When multiple planes of the same type are present in the stream it's possible
+; that they are related
+;
+;-
+function _das2_op2role, prop
+	compile_opt idl2, hidden
+	
+	if prop.value eq 'BIN_MAX' then return, 'max'
+	if prop.value eq 'BIN_MIN' then return, 'min'
+	; Add others here
+		
+	return, 'center'
+end
+
 
 ; --------------------------------------------------------------------------- ;
 ;+
@@ -279,21 +301,25 @@ function _das2_addDimsFromHdr, $
 		iOffset += decoder.chunkSize()
 		var = _das2_varFromHdr( hPlane, idxmap, decoder)
 			
-		; Add to an existing dimension (if min/max) or start a new one
-		; When we restructure das2 streams dimensions (or some other
-		; variable grouping mechanism) need to be added
+		; Add to an existing dimension (if min/max) or start a new one.
+		
+		; When we restructure das2 streams, dimensions (or some other plane
+		; grouping mechanism) need to be added
 			
 		propSrc = _das2_getProp(hPlane, 'source')
 		propOp  = _das2_getProp(hPlane, 'operation')
 		
 		; get an existing dim...
+		dim = !null
 		if propSrc ne !null then begin
-			if dataset.dims.haskey(propSrc.value) then dim = dataset.dims[propSrc.value] $
-				else dim = !null
+			if dataset.dims.haskey(propSrc.value) then $
+				dim = dataset.dims[propSrc.value]
 		endif
 		
 		; ...or create a new one
 		if dim eq !null then begin
+			
+			;printf, -2, sDatAxis, sKind, hPlane
 			
 			dim = _das2_dimFromHdr(hStream, sDatAxis, hPlane, sKind)
 			
@@ -329,7 +355,8 @@ function _das2_addDimsFromHdr, $
 			if dimFirst eq !null then dataset.name = sName
 									
 		endif else begin
-			sRole = _das2_op2role(sOp)
+			message, 'Peaks-averages datasets such as Voyager SA are not yet supported'
+			sRole = _das2_op2role(propOp)
 			dim.vars[sRole] = var
 		endelse
 			
@@ -463,7 +490,8 @@ function _das2_onNewPktId, hStrmHdr, hPktHdr, DEBUG=bDebug
 		hStream, hPkt, 'x', 'x', idxmap, iOffset, sKind, dataset, FIRST=xDimFirst $
 	)
 	
-	if hPkt.haskey('z') || hPkt.haskey('yscan') then sKind = 'Data'
+	if hPkt.haskey('z') || hPkt.haskey('yscan') then sKind = 'Coordinate' $
+		else sKind = 'Data'
 		
 	iOffset = _das2_addDimsFromHdr( $
 		hStream, hPkt, 'y', 'y', idxmap, iOffset, sKind, dataset, FIRST=yDimFirst $
@@ -617,23 +645,41 @@ pro _das2_onFinish, lDatasets
 			aVar = dim.vars.keys()
 			for v = 0, n_elements(aVar) - 1 do begin
 				var = dim.vars[ aVar[v] ]
+				;printf, -2, '_das2_onFinish, ',aDims[d],':',aVar[v],' type ', $
+				;	typename(*(var.values))
+				;printf, -2, '_das2_onFinish, ',aDims[d],':',aVar[v],' dims ', $
+				;	size(*(var.values), /DIMENSIONS)
 				
 				if typename(*(var.values)) eq 'LIST' then begin
-
+					lVals = *(var.values)
+					
 					; we have a problem here.  IDL will collapse the dimensions if
-					; only a single packet is read.
-										
-					if n_elements(*(var.values)) eq 1 then begin
+					; only a single packet is read.					
+					if n_elements(lvals) eq 1 then begin
 						
-						lVals = *(var.values)
 						nSz = n_elements(lVals[0])
 						
-						aVals = (*(var.values)).ToArray()
+						aVals = (lVals).ToArray()
 						
 						var.values = reform(aVals, nSz, 1, /OVERWRITE)
 						
 					endif else begin
-						var.values = (*(var.values)).ToArray(/TRANSPOSE)
+					
+						if ~ lVals.isEmpty() then begin
+							
+							; transpose arrays greater than rank 1 so that column
+							; numbers are still first in keeping with IDL style
+							
+							if n_elements(lVals[0]) eq 1 then begin
+								var.values = lVals.ToArray() 
+								;printf, -2, 'Not transposing array, type & size is', $
+								;	size(*(var.values), /DIMENSIONS), $
+								;	typename(*(var.values))
+									
+							endif else begin
+								var.values = lVals.ToArray(/TRANSPOSE)
+							endelse
+						endif
 					endelse
 					
 					

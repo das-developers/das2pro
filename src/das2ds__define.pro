@@ -143,9 +143,15 @@ function das2ds::_idxRangeStr
 		
 		foreach var, self.dims[sDim].vars, sRole do begin
 			
-			;printf, -2, 'Calling shape for ',sDim,':',sRole
+			;printf, -2, '_idxRangeStr: Calling dshape for ',sDim,':',sRole
 			aMap = var.dshape()
-			nMapDims = (size(aMap, /DIMENSIONS))[1]
+			;printf, -2, '_idxRangeStr: shape is', aMap
+			;printf, -2, '_idxRangeStr: size is', size(aMap, /DIMENSIONS)
+			
+			; IDL likes to switch output types...a lot
+			aSize = size(aMap, /DIMENSIONS)
+			if n_elements(aSize) eq 1 then nMapDims = 1 $
+			else nMapDims = aSize[1]
 
 			; If the map doesn't have the same dimensions as the dataset rank, 
 			; the dataset is inconsistant.			
@@ -199,8 +205,17 @@ function das2ds::_overloadPrint
 	;       printing themselves instead of doing it all here
 	
 	
-	; TODO: Sort all data dimensions before all coordinate dimensions
-	aKeys = self.dims.keys()	
+	; Sort all data dimensions before all coordinate dimensions
+	aKeys = self.dims.keys()
+	lCoordKeys = list()
+	lDataKeys = list()
+	for i = 0, n_elements(aKeys) - 1 do begin
+		dim = self.dims[aKeys[i]]
+		if dim.kind eq 'Data' then lDataKeys.add, aKeys[i] $
+			else lCoordKeys.add, aKeys[i]
+	endfor
+	aKeys = [ lDataKeys.ToArray(), lCoordKeys.ToArray() ]
+		
 	for i = 0, n_elements(aKeys) - 1 do begin
 		sDim = aKeys[i]
 		dim = self.dims[sDim]
@@ -237,6 +252,46 @@ function das2ds::_overloadPrint
 	
 	return, sOut + nl
 end
+
+; --------------------------------------------------------------------------- ;
+;+
+; Provide the key names for all physical dimensions in the dataset
+;
+; :Keywords:
+;     D : in, type=boolean, optional
+;        Return just the string ids for the data dimensions
+;
+;     C : in, type=boolean, optional
+;        Return just the string ids for the coordinate dimensions
+;
+; :Returns:
+;    list - A list of strings containing the hask keys for the requested
+;        physical dimensions.
+;
+; :Author:
+;    Chris Piker
+;-
+
+function das2ds::keys, D=d, C=c
+	compile_opt idl2, hidden
+
+	lOut = list()
+	if keyword_set(d) then begin
+		foreach key, self.dims.keys() do begin
+			dim = self.dims[key]
+			if dim.kind eq 'Data' then lOut.add, key
+		endforeach
+	endif else if keyword_set(c) then begin
+		foreach key, self.dims.keys() do begin
+			dim = self.dims[key]
+			if dim.kind ne 'Data' then lOut.add, key
+		endforeach
+	endif else lOut = self.dims.keys()
+
+	aOut = lOut.toarray()
+	aOut = aOut[ sort(aOut) ]
+	return, aOut
+end	
 
 ; --------------------------------------------------------------------------- ;
 ;+

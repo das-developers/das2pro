@@ -135,7 +135,7 @@ function das2var::dshape
 		arydims = size(*(self.values), /DIMENSIONS)
 		
 		if idxmap[i] gt -1 then begin	
-			;printf, -2, 'idxmap:  ', idxmap, 'array dims:  ', arydims
+			;printf, -2, 'das2var::dshape, idxmap:  ', idxmap, 'array dims:  ', arydims
 			aShape[1, i] =  arydims[ idxmap[i] ]
 		endif else aShape[1,i] = 0.0
 	endfor
