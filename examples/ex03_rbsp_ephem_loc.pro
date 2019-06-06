@@ -52,7 +52,7 @@ pro ex03_rbsp_ephem_loc
 			xtickformat='label_date', xtickdir=1, ytickdir=1 $
 		)
 				
-		if i eq 0 then aPlots[i].title = sDataSet  ; Title on top plot
+		if i eq 0 then aPlots[i].title = sDataSet + '!C' ; Title on top plot
 		
 		if i eq (nPlots - 1) then (aPlots[i])['axis0'].showtext = 1 ;label X				
 	endfor

@@ -51,7 +51,11 @@ package, See your
 directory for other example programs that may have been added.  If das2pro 
 was aquired via git clone, just look in the examples sub-directory.
 
-To remove this package use the IPM command:
+To update das2pro to the latest version run the IPM command:
 
-  `IDL> IPM, /remove, 'das2pro'`
+`IDL> ipm, /update, 'das2pro'`
+
+and to remove das2pro from your packages directory issue:
+
+`IDL> IPM, /remove, 'das2pro'`
 
