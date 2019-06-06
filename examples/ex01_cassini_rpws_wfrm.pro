@@ -44,11 +44,11 @@ pro ex01_cassini_rpws_wfrm
 		xSampleTimes, yWaveform, xtit=sXlabel, ytit=sYlabel, $
 	   tit=sTitle, dimensions=[1200, 400], /buffer, xst=1 $
 	)
-	p.xthick = 4.
-	p.ythick = 4.
-	p.thick = 3.
-	p.font_size = 24
-	p.tit.font_size = 24
+	p.xthick = 2.
+	p.ythick = 2.
+	p.thick = 1.4
+	p.font_size = 12
+	p.tit.font_size = 12
 	
 	sFile = 'ex01_cassini_rpws_wfrm.png'
 	p.save, sFile, width=1200, height=400, resolution=300
