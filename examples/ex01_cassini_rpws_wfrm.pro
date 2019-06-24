@@ -17,7 +17,7 @@ pro ex01_cassini_rpws_wfrm
 	; Get the dataset
 	lDs = das2_readhttp(sUrl, messages=sMsg)
 
-	if lDs eq !null then begin
+	if lDs[0] eq !null then begin
 		printf, -2, sMsg
 		stop
 	endif
