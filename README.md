@@ -16,7 +16,7 @@ $ git clone https://github.com/das-developers/das2pro.git
 $ cd das2pro
 $ env IDL_PATH="<IDL_DEFAULT>:$(pwd)/src:$(pwd)/examples" idl87
 IDL> das2pro_ut              ;running unit tests
-IDL> ex02_mex_marsis_ais     ;for example
+IDL> ex03_rbsp_ephem_loc     ;for example
 ```
 Here '$' indicates a shell command, and 'IDL>' indicates an IDL command.
 
