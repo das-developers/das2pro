@@ -17,7 +17,7 @@ the single IDL command:
 
 `IDL> ipm, /install, 'https://github.com/das-developers/das2pro'`
 
-After installation it's best to test the package by plottin one of more of 
+After installation it's best to test the package by plotting one or more of 
 the examples programs:
 ```
 IDL> ex01_cassini_rpws_wfrm
@@ -51,4 +51,3 @@ IDL> das2pro_ut              ;running unit tests
 IDL> ex02_mex_marsis_ais     ;for example
 ```
 Here '$' indicates a shell command, and 'IDL>' indicates an IDL command.
-
