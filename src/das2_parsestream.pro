@@ -826,13 +826,15 @@ end
 function das2_parsestream, buffer, MESSAGES=messages
 	compile_opt idl2
 	
+	lErr = list()  ; An empty list to return on an error
+	
 	messages = ""
 	
    nStreamSz = n_elements(buffer)
    if strcmp(string(buffer[0:3]), '[00]') NE 1 AND $
       strcmp(string(buffer[0:3]), '[xx]') NE 1 then begin
        printf, -2, 'ERROR: Invalid das2 stream! Does not start with [00]. Got: '+string(buffer[0:3])
-       return, !null
+       return, lErr
    endif
    nStreamHdrSz = long(string(buffer[4:9])) ; fixed length for stream header size
 	hStreamHdr = xml_parse(string(buffer[10:10+nStreamHdrSz-1]))
@@ -845,7 +847,7 @@ function das2_parsestream, buffer, MESSAGES=messages
       ; "NoDataInInterval" for a properly behaved stream.
       if ptrStream eq n_elements(buffer) then begin
 			messages="Stream contains no packets, not even an exception message"
-			return, !null
+			return, lErr
 		endif
             
       if keyword_set(debug) then begin
@@ -862,7 +864,7 @@ function das2_parsestream, buffer, MESSAGES=messages
       
    endif else begin
 		messages = string(buffer)
-	   return, !null
+	   return, lErr
    endelse
 	 
 end

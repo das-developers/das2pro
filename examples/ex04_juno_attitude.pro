@@ -1,18 +1,18 @@
 
-; Download and plot Van Allen Probe A position data
+; Plot direction away from the planet in spacecraft coordinates
 
-pro ex03_rbsp_ephem_loc
+pro ex04_juno_attitude
 	compile_opt idl2
 	
 	; Generate a URL for the desired subset, we'll use a low-level
 	; function for now, as catalog lookup is not yet implemented.
 	
-	sServer = 'https://emfisis.physics.uiowa.edu/das/server'
-	sDataSet='Van_Allen_Probes/A/Ephemeris/Geomagnetic'
-	sBeg = '2012-09-10'
-	sEnd = '2012-09-15'
-	sInt = 3600
-	sFmt = '%s?server=dataset&dataset=%s&start_time=%s&end_time=%s&interval=%d'
+	sServer = 'http://jupiter.physics.uiowa.edu/das/server'
+	sDataSet='Juno/Ephemeris/Jupiter_Radial_SC'
+	sBeg = '2017-02-02T12:58'
+	sEnd = '2017-02-02T12:59'
+	sInt = '0.5'
+	sFmt = '%s?server=dataset&dataset=%s&start_time=%s&end_time=%s&interval=%s'
 	sUrl = string(sServer, sDataset, sBeg, sEnd, sInt, format=sFmt)
 
 	; Get the dataset
@@ -46,7 +46,7 @@ pro ex03_rbsp_ephem_loc
 		aData = ds[ aKeys[i], 'center'].array
 		sYLbl = ds[ aKeys[i] ].props['label'].strval
 	
-		aPlots[i] = plot( /current, /buffer, $
+		aPlots[i] = plot( /current, $ ;/buffer, $
 			aCoords, aData, position=[0.11, y0, 0.91, y1], ytit=sYLbl, $
 			xshowtext=0, color=aColors[i], thick=2, xtickunits='time', $
 			xtickformat='label_date', xtickdir=1, ytickdir=1 $
@@ -57,10 +57,10 @@ pro ex03_rbsp_ephem_loc
 		if i eq (nPlots - 1) then (aPlots[i])['axis0'].showtext = 1 ;label X				
 	endfor
 	
-	sFile = 'ex03_rbsp_ephem_loc.png'
-	aPlots[0].save, sFile, width=800, height=800, resolution=300
+	;sFile = 'ex04_juno_attitude.png'
+	;aPlots[0].save, sFile, width=800, height=800, resolution=300
 	
-	print, 'Plot ', sFile, ' printed to the current directory'
+	;print, 'Plot ', sFile, ' printed to the current directory'
 	
 end
 	

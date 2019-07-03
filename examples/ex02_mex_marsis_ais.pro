@@ -19,7 +19,7 @@ pro ex02_mex_marsis_ais
 	sMsg = !null
 	lDs = das2_readhttp(sUrl, messages=sMsg)
 	
-	if lDs eq !null then begin
+	if if lDs.length eq 0 then begin
 		printf, -2, sMsg
 		stop
 	endif

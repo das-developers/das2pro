@@ -9,47 +9,28 @@ This software, **das2pro**, provides a client library for das2 servers written i
 pure [IDL](https://www.harrisgeospatial.com/docs/using_idl_home.html).  To find
 out more about das2 visit https://das2.org.
 
-To download this package and run the included examples directly from your git
-working copy area issue:
-```
-$ git clone https://github.com/das-developers/das2pro.git
-$ cd das2pro
-$ env IDL_PATH="<IDL_DEFAULT>:$(pwd)/src:$(pwd)/examples" idl87
-IDL> das2pro_ut              ;running unit tests
-IDL> ex02_mex_marsis_ais     ;for example
-```
-Here '$' indicates a shell command, and 'IDL>' indicates an IDL command.
-
 **das2pro** is an IDL package and may be installed using the 
-[IPM](https://www.harrisgeospatial.com/docs/ipm.html)  command.  The IPM command
-only installs github.com releases (does not use clone) and as of May 2019, the
-current github releases are  *not yet ready for public use*.  If you would like 
-to try them anyway and are running idl version 8.7.1 or above, das2pro can be
-installed by issuing the single IDL command:
+[IPM](https://www.harrisgeospatial.com/docs/ipm.html)  command.  The IPM
+command only installs github.com releases (does not use clone).  If you are
+using IDL 8.7.1 or higher, das2pro can be downloaded and installed by issuing
+the single IDL command:
 
 `IDL> ipm, /install, 'https://github.com/das-developers/das2pro'`
 
-After installation it's best to test the package by running the unit test main
-program as so:
-
-`IDL> das2pro_ut`
-
-and use the following to run one or more of the included example programs:
-
+After installation it's best to test the package by plottin one of more of 
+the examples programs:
 ```
 IDL> ex01_cassini_rpws_wfrm
-IDL> ex02_mex_marsis_ais
 IDL> ex03_rbsp_ephem_loc
+IDL> ex05_juno_waves_survey
 ```
-which generate output PNG images into your current directory.
-
-Other examples may be included as well.  If das2pro has been installed as a
-package, See your 
+which generate output PNG images into your current directory.  Use your
+favorite image viewer to inspect the results.  Other examples are included as
+well.  See your local package directory at: 
 
 `$HOME/.idl/idl/packages/das2pro/examples`
 
-directory for other example programs that may have been added.  If das2pro 
-was aquired via git clone, just look in the examples sub-directory.
+for more.
 
 To update das2pro to the latest version run the IPM command:
 
@@ -58,4 +39,16 @@ To update das2pro to the latest version run the IPM command:
 and to remove das2pro from your packages directory issue:
 
 `IDL> IPM, /remove, 'das2pro'`
+
+If you are not running IDL 8.7.1 or higher, but are using at least IDL 8.6, 
+das2pro will still work.  You can download this package and run the included
+examples directly from your git working copy area.  To do so issue:
+```
+$ git clone https://github.com/das-developers/das2pro.git
+$ cd das2pro
+$ env IDL_PATH="<IDL_DEFAULT>:$(pwd)/src:$(pwd)/examples" idl87
+IDL> das2pro_ut              ;running unit tests
+IDL> ex02_mex_marsis_ais     ;for example
+```
+Here '$' indicates a shell command, and 'IDL>' indicates an IDL command.
 

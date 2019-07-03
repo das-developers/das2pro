@@ -53,7 +53,8 @@ end
 ;
 ; :Returns:
 ;    A list of dataset objects.  Each dataset object corresponds to a single
-;    packet type in the input.
+;    packet type in the input.  If no datasets could be retrieved the function
+;    return an empty list, so ret_val.length = 0.
 ;
 ; :Requires:
 ;    xml_parse: IDL 8.6.1
@@ -90,6 +91,8 @@ function das2_readhttp, sUrl, extras=extras, verbose=verbose, debug=debug, messa
    ; catch exceptions
    ;CATCH, errorStatus
    errorStatus = 0
+	
+	lErr = list()  ; An empty list to return on an error
 
 ;  if float(!version.release) LT 8.6 then begin
 ;     print, 'Das2reader does not support earlier IDL version than 8.6!'
@@ -117,7 +120,7 @@ function das2_readhttp, sUrl, extras=extras, verbose=verbose, debug=debug, messa
       ; Destroy the url object
       OBJ_DESTROY, oUrl
 
-      return, !null
+      return, lErr
    endif
 
    oUrl = IDLnetURL()  ; object creation
