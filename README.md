@@ -3,11 +3,9 @@ Das2 servers typically provide data relavent to space plasma and magnetospheric
 physics research.  To retrieve data, an HTTP GET request is posted to a das2 
 server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
-response body.
-
-This software, **das2pro**, provides a client library for das2 servers written in
-pure [IDL](https://www.harrisgeospatial.com/docs/using_idl_home.html).  To find
-out more about das2 visit https://das2.org.
+response body.  This software provides a client library for das2 servers
+written in pure [IDL](https://www.harrisgeospatial.com/docs/using_idl_home.html).
+To find out more about das2 visit https://das2.org.
 
 **das2pro** is an IDL package and may be installed using the 
 [IPM](https://www.harrisgeospatial.com/docs/ipm.html)  command.  The IPM
@@ -17,20 +15,19 @@ the single IDL command:
 
 `IDL> ipm, /install, 'https://github.com/das-developers/das2pro'`
 
-After installation it's best to test the package by plotting one or more of 
-the examples programs:
+After installation it's best to test the package by generating one or more
+of the example plots.  This can be done running the included example 
+procedures as follows:
 ```
 IDL> ex01_cassini_rpws_wfrm
 IDL> ex03_rbsp_ephem_loc
 IDL> ex05_juno_waves_survey
 ```
-which generate output PNG images into your current directory.  Use your
-favorite image viewer to inspect the results.  Other examples are included as
-well.  See your local package directory at: 
+Each example generates a PNG image in the current directory. Use your favorite
+image viewer to inspect the results.  Other examples may be found in within
+your local IDL package directory:
 
 `$HOME/.idl/idl/packages/das2pro/examples`
-
-for more.
 
 To update das2pro to the latest version run the IPM command:
 
